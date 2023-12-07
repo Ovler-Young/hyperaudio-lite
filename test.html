@@ -32,14 +32,14 @@
       <input id="search" type="text" ><input type="submit" value="search">
       <!-- Add a file uploader-->
       <div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0;">
-        <label for="jsonUpload">Upload Files:</label>
-        <input id="jsonUpload" type="file" accept=".json,.vtt,.srt,.mp4,.avi,.mkv" multiple>
+        <label for="Uploader">Upload Files:</label>
+        <input id="Uploader" type="file" accept=".json,.vtt,.srt,.mp4,.avi,.mkv" multiple>
       </div>
     </form>
   </p>
 
   <script>
-    document.getElementById('jsonUpload').addEventListener('change', function(e) {
+    document.getElementById('Uploader').addEventListener('change', function(e) {
       var files = Array.from(e.target.files).sort((a, b) => b.name.localeCompare(a.name));
   
       if (files.length === 1) {
