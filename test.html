@@ -40,17 +40,36 @@
 
   <script>
     document.getElementById('jsonUpload').addEventListener('change', function(e) {
-      var files = e.target.files;
-      if (!files.length) return;
+      var files = Array.from(e.target.files).sort((a, b) => b.name.localeCompare(a.name));
   
-      Array.from(files).forEach(function(file) {
-        var reader = new FileReader();
-        reader.onload = function(e) {
-          var contents = e.target.result;
-          // handle the file contents here
-        };
-        reader.readAsText(file);
-      });
+      if (files.length === 1) {
+        var file = files[0];
+        if (file.type.startsWith('video/')) {
+          var url = URL.createObjectURL(file);
+          document.querySelector('[data-media-src]').setAttribute('data-media-src', url);
+
+          // Get the video element and set its src attribute
+          var videoElement = document.getElementById('hyperplayer');
+          videoElement.setAttribute('src', url);
+
+          // Load the video
+          videoElement.load();
+        } else if (['.vtt', '.srt', '.json'].includes(file.name.slice(-4))) {
+          switch (subtitleType) {
+            case '.vtt':
+              // process VTT subtitle file
+              break;
+            case '.srt':
+              // process SRT subtitle file
+              break;
+            case '.json':
+              // process JSON file
+              break;
+          }
+        }
+      } else if (files.length > 1) {
+        // later
+      }
     });
   </script>
 
@@ -58,18 +77,6 @@
   <video id="hyperplayer" class="hyperaudio-player" style="z-index: 5000000; position:relative; width:400px" controls>
     <track id="hyperplayer-vtt" label="English" kind="subtitles" srclang="en" src="">
   </video>
-
-  <!-- Uncomment the following lines for SoundCloud compatibility. Keep commented if you are using native or YouTube -->
-  <!-- iFrame HTML can be found by clicking the embed button while viewing the audio on SoundCloud -->
-  <!-- <script src="https://w.soundcloud.com/player/api.js"></script>
-  <iframe id="hyperplayer" data-player-type="soundcloud" width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" 
-        src="https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/730479133&color=%23ff5500&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true">
-  </iframe> -->
-
-  <!-- Uncomment the following lines for YouTube compatibility. Keep commented if you are using native or SoundCloud -->
-  <!-- <iframe id="hyperplayer" data-player-type="youtube" width="400" height="300" frameborder="no" allow="autoplay"
-    src="https://www.youtube.com/embed/xLcsdc823dg?enablejsapi=1">
-  </iframe> -->
 
   <div id="hypertranscript" class="hyperaudio-transcript" style="overflow-y:scroll; height:600px; position:relative; border-style:dashed; border-width: 1px; border-color:#999; padding: 8px">
     
