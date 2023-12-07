@@ -66,23 +66,83 @@
 
           // Change the title to include the video name
           document.title = 'Hyperaudio|' + file.name;
-        } else if (['.vtt', '.srt', '.json'].includes(file.name.slice(-4))) {
-          switch (subtitleType) {
-            case '.vtt':
-              // process VTT subtitle file
-              break;
-            case '.srt':
-              // process SRT subtitle file
-              break;
-            case '.json':
-              // process JSON file
-              break;
-          }
+        } else {
+          var reader = new FileReader();
+          reader.onload = function(e) {
+            var content = e.target.result;
+            var fileName = file.name;
+            var subtitleType = fileName.substr(fileName.lastIndexOf('.'));
+            switch (subtitleType) {
+              case '.vtt':
+                console.log('Unsupported subtitle format');
+                processVTT(content);
+                break;
+              case '.srt':
+                console.log('Unsupported subtitle format');
+                processSRT(content);
+                break;
+              case '.json':
+                processJSON(content);
+                break;
+              default:
+                console.log('Unsupported subtitle format');
+                break;
+            }
+          };
+          reader.readAsText(file);
         }
+        
       } else if (files.length > 1) {
         // later
       }
     });
+
+    function processVTT(content) {
+      // process VTT subtitle file
+    }
+
+    function processSRT(content) {
+      // process SRT subtitle file
+    }
+
+    function processJSON(content) {
+      // Parse the JSON content
+      const data = JSON.parse(content);
+      // Initialize the output string with the opening tags
+      let outputString = '<p>start';
+      // Initialize the end time of the last word
+      let lastEndTime = 0;
+      // Iterate over the segments
+      for (const segment of data.segments) {
+          // Iterate over the words in each segment
+          for (const word of segment.words) {
+              // If the start time of the current word is more than 2 seconds after the end time of the last word, add a new paragraph
+              if (word.start - lastEndTime > 2) {
+                  outputString += '</p><p>';
+              } else if (word.start - lastEndTime > 0.4) {
+                  outputString += `<span data-m="${Math.round(word.start * 1000)}" data-d="400">，</span>`;
+              }
+              // Add a span element for the current word
+              outputString += `<span data-m="${Math.round(word.start * 1000)}" data-d="${Math.round((word.end - word.start) * 1000)}">${/^[a-zA-Z]+$/.test(word.word) ? word.word + ' ' : word.word}</span>`;
+              // Update the end time of the last word
+              lastEndTime = word.end;
+          }
+      }
+      // Add the closing tags
+      outputString += '</p>';
+      console.log(outputString);
+      insertSubtitles(outputString);
+      new HyperaudioLite("hypertranscript", "hyperplayer", minimizedMode, autoScroll, doubleClick, webMonetization, playOnClick);
+    }
+
+    function insertSubtitles(content) {
+      // Get the first section in the article
+      var articleElement = document.querySelector('article');
+      var firstSection = articleElement.querySelector('section');
+
+      // Insert the subtitles into the first section
+      firstSection.innerHTML = content;
+    }
   </script>
 
   <!-- Comment out the following line if you are using an alternative player. ie SoundCloud or YouTube -->
@@ -107,19 +167,15 @@
   <script src="js/share-this-clipboard.js"></script>
   <script src="js/caption.js"></script>
   <script>
-  ShareThis({
-      sharers: [ ShareThisViaTwitter, ShareThisViaClipboard ],
-      selector: "article"
-  }).init();
 
   // minimizedMode is still experimental - it aims to show the current words in the title, which can be seen on the browser tab.
   let minimizedMode = false;
   let autoScroll = true;
-  let doubleClick = false;
-  let webMonetization = true;
-  let playOnClick = false;
+  let doubleClick = true;
+  let webMonetization = false;
+  let playOnClick = true;
 
-  new HyperaudioLite("hypertranscript", "hyperplayer", minimizedMode, autoScroll, doubleClick, webMonetization, playOnClick);
+  // new HyperaudioLite("hypertranscript", "hyperplayer", minimizedMode, autoScroll, doubleClick, webMonetization, playOnClick);
 
   // Override scroll parameters
   //ht1.setScrollParameters(<duration>, <delay>, <offset>, <container>);
