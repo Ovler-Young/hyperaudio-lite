@@ -53,6 +53,9 @@
 
           // Load the video
           videoElement.load();
+
+          // Change the title to include the video name
+          document.title = 'Hyperaudio|' + file.name;
         } else if (['.vtt', '.srt', '.json'].includes(file.name.slice(-4))) {
           switch (subtitleType) {
             case '.vtt':
