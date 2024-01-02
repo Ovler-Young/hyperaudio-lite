@@ -31,10 +31,10 @@
     Playback Rate <span id="currentPbr">1</span><input id="pbr" type="range" value="1" min="0.5" max="3" step="0.1"
       style="width:10%">
     <!-- Add a file uploader-->
-    <div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0">
+    <span style="border: 1px solid #ccc; padding: 10px; margin: 10px 0">
       <label for="Uploader">Up</label>
       <input id="Uploader" type="file" accept=".json,.mp4" style="width: 100px;">
-    </div>
+    </span>
   </form>
   </p>
 
@@ -305,7 +305,7 @@
   </script>
 
   <!-- Comment out the following line if you are using an alternative player. ie SoundCloud or YouTube -->
-  <video id="hyperplayer" class="hyperaudio-player" style="z-index: 5000000; position:sticky; width:500px" controls>
+  <video id="hyperplayer" class="hyperaudio-player" style="z-index: 5000000; position:sticky; width:100%" controls>
     <track id="hyperplayer-vtt" label="English" kind="subtitles" srclang="en" src="">
   </video>
 
