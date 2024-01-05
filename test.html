@@ -346,6 +346,12 @@
 
       // Insert the subtitles into the first section
       firstSection.innerHTML = content;
+
+      // remove other sections
+      var sections = articleElement.querySelectorAll('section');
+      for (var i = 1; i < sections.length; i++) {
+        sections[i].remove();
+      }
     }
   </script>
 
