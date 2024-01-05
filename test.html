@@ -39,14 +39,20 @@
   </p>
 
   <script>
-    window.onload = function () {
+  function getparams() {
       var params = new URLSearchParams(window.location.search);
       var videoUrl = params.get('video');
       var subtitleUrl = params.get('subtitle');
 
       if (videoUrl) {
-        processVideo(videoUrl);
-      }
+    fetch(videoUrl)
+      .then(response => response.blob())
+      .then(blob => {
+        var videoBlobUrl = URL.createObjectURL(blob);
+        processVideo(videoBlobUrl);
+      })
+      .catch(error => console.error('Error fetching video:', error));
+  }
 
       if (subtitleUrl) {
         fetch(subtitleUrl)
@@ -71,6 +77,8 @@
           .catch(error => console.error('Error fetching subtitle:', error));
       }
     };
+
+    document.addEventListener('DOMContentLoaded', getparams());
 
     document.getElementById('Uploader').addEventListener('change', function (e) {
       var files = Array.from(e.target.files).sort((a, b) => b.name.localeCompare(a.name));
@@ -109,9 +117,6 @@
 
       // Load the video
       videoElement.load();
-
-      // Change the title to include the video name
-      document.title = 'Hyperaudio|' + file.name;
     }
 
     function processSubtitles(file) {
