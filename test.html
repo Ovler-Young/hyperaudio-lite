@@ -39,6 +39,39 @@
   </p>
 
   <script>
+    window.onload = function () {
+      var params = new URLSearchParams(window.location.search);
+      var videoUrl = params.get('video');
+      var subtitleUrl = params.get('subtitle');
+
+      if (videoUrl) {
+        processVideo(videoUrl);
+      }
+
+      if (subtitleUrl) {
+        fetch(subtitleUrl)
+          .then(response => response.text())
+          .then(content => {
+            var subtitleType = subtitleUrl.substr(subtitleUrl.lastIndexOf('.'));
+            switch (subtitleType) {
+              case '.vtt':
+                processVTT(content);
+                break;
+              case '.srt':
+                processSRT(content);
+                break;
+              case '.json':
+                processJSON(content);
+                break;
+              default:
+                console.log('Unsupported subtitle format');
+                break;
+            }
+          })
+          .catch(error => console.error('Error fetching subtitle:', error));
+      }
+    };
+
     document.getElementById('Uploader').addEventListener('change', function (e) {
       var files = Array.from(e.target.files).sort((a, b) => b.name.localeCompare(a.name));
 
@@ -52,16 +85,14 @@
       });
 
       if (videoFile) {
-        processVideo(videoFile);
+        processVideo(URL.createObjectURL(videoFile));
       }
       if (subtitleFile) {
         processSubtitles(subtitleFile);
       }
     });
 
-    function processVideo(file) {
-      var url = URL.createObjectURL(file);
-
+    function processVideo(url) {
       // Create a new section element
       var newSection = document.createElement('section');
       newSection.setAttribute('data-media-src', url);
