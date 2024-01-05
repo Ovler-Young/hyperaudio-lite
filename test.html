@@ -39,7 +39,7 @@
   </p>
 
   <script>
-  function getparams() {
+    function getparams() {
       var params = new URLSearchParams(window.location.search);
       var videoUrl = params.get('video');
       var subtitleUrl = params.get('subtitle');
@@ -66,9 +66,9 @@
           })
           .catch(error => console.error('Error fetching subtitle:', error));
       }
-      
+
       if (videoUrl) {
-        // sleep 1 second to wait for the subtitle to be loaded
+        // sleep 0.5 second to wait for the subtitle to be loaded
         setTimeout(() => {
           processVideo(videoUrl);
         }, 500);
