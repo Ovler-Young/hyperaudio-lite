@@ -42,60 +42,72 @@
     document.getElementById('Uploader').addEventListener('change', function (e) {
       var files = Array.from(e.target.files).sort((a, b) => b.name.localeCompare(a.name));
 
-      if (files.length === 1) {
-        var file = files[0];
+      var videoFile, subtitleFile;
+      files.forEach(file => {
         if (file.type.startsWith('video/')) {
-          var url = URL.createObjectURL(file);
-
-          // Create a new section element
-          var newSection = document.createElement('section');
-          newSection.setAttribute('data-media-src', url);
-
-          // Get the article element
-          var articleElement = document.querySelector('article');
-
-          // Insert the new section at the top of the article
-          articleElement.insertBefore(newSection, articleElement.firstChild);
-
-          // Get the video element and set its src attribute
-          var videoElement = document.getElementById('hyperplayer');
-          videoElement.setAttribute('src', url);
-
-          // Load the video
-          videoElement.load();
-
-          // Change the title to include the video name
-          document.title = 'Hyperaudio|' + file.name;
-        } else {
-          var reader = new FileReader();
-          reader.onload = function (e) {
-            var content = e.target.result;
-            var fileName = file.name;
-            var subtitleType = fileName.substr(fileName.lastIndexOf('.'));
-            switch (subtitleType) {
-              case '.vtt':
-                console.log('Unsupported subtitle format');
-                processVTT(content);
-                break;
-              case '.srt':
-                console.log('srt')
-                processSRT(content);
-                break;
-              case '.json':
-                processJSON(content);
-                break;
-              default:
-                console.log('Unsupported subtitle format');
-                break;
-            }
-          };
-          reader.readAsText(file);
+          videoFile = file;
+        } else if (['application/json', 'text/vtt', 'application/x-subrip'].includes(file.type)) {
+          subtitleFile = file;
         }
+      });
 
-      } else if (files.length > 1) {
-        // later
+      if (videoFile) {
+        processVideo(videoFile);
+      }
+      if (subtitleFile) {
+        processSubtitles(subtitleFile);
       }
     });
+
+    function processVideo(file) {
+      var url = URL.createObjectURL(file);
+
+      // Create a new section element
+      var newSection = document.createElement('section');
+      newSection.setAttribute('data-media-src', url);
+
+      // Get the article element
+      var articleElement = document.querySelector('article');
+
+      // Insert the new section at the top of the article
+      articleElement.insertBefore(newSection, articleElement.firstChild);
+
+      // Get the video element and set its src attribute
+      var videoElement = document.getElementById('hyperplayer');
+      videoElement.setAttribute('src', url);
+
+      // Load the video
+      videoElement.load();
+
+      // Change the title to include the video name
+      document.title = 'Hyperaudio|' + file.name;
+    }
+
+    function processSubtitles(file) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var content = e.target.result;
+        var fileName = file.name;
+        var subtitleType = fileName.substr(fileName.lastIndexOf('.'));
+        switch (subtitleType) {
+          case '.vtt':
+            console.log('Unsupported subtitle format');
+            processVTT(content);
+            break;
+          case '.srt':
+            console.log('srt')
+            processSRT(content);
+            break;
+          case '.json':
+            processJSON(content);
+            break;
+          default:
+            console.log('Maybe Unsupported subtitle format');
+            break;
+        }
+      };
+      reader.readAsText(file);
+    }
 
     function processVTT(content) {
       // process VTT subtitle file
