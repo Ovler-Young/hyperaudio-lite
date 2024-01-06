@@ -25,15 +25,15 @@
 </head>
 
 <body>
+  <box style="height: 100vh;box-sizing: border-box;" id="Thebox">
   <p>
   <form id="searchForm" style="float:right;position:static;">
     <!-- comment out the following line if you don't need playback rate controls -->
-    Playback Rate <span id="currentPbr">1</span><input id="pbr" type="range" value="1" min="0.5" max="3" step="0.1"
-      style="width:30%">
+    Playback Rate <span id="currentPbr">1</span><input id="pbr" type="range" value="1" min="0.5" max="3" step="0.1">
     <!-- Add a file uploader-->
-    <span style="border: 1px solid #ccc; padding: 10px; margin: 10px 0">
+    <span style="border: 1px solid #ccc; padding: 5px; margin: 5px 0">
       <label for="Uploader">Up</label>
-      <input id="Uploader" type="file" accept=".json,.mp4" style="width: 300px;" multiple>
+      <input id="Uploader" type="file" accept=".json,.mp4" multiple>
     </span>
   </form>
   </p>
@@ -76,6 +76,7 @@
     };
 
     document.addEventListener('DOMContentLoaded', getparams());
+    window.onresize = updateHeight;
 
     document.getElementById('Uploader').addEventListener('change', function (e) {
       var files = Array.from(e.target.files).sort((a, b) => b.name.localeCompare(a.name));
@@ -114,6 +115,11 @@
 
       // Load the video
       videoElement.load();
+
+      // fit height
+      setTimeout(() => {
+        updateHeight();
+        }, 2000);
     }
 
     function processSubtitles(file) {
@@ -353,6 +359,21 @@
         sections[i].remove();
       }
     }
+  
+    function updateHeight() {
+      let boxHeight = window.getComputedStyle(document.getElementById('Thebox')).height;
+      console.log(boxHeight)
+      let formHeight = window.getComputedStyle(document.getElementById('searchForm')).height;
+      console.log(formHeight)
+      let hyperplayerHeight = window.getComputedStyle(document.getElementById('hyperplayer')).height;
+      console.log(hyperplayerHeight)
+
+      let hypertranscriptHeight =  `${parseInt(boxHeight)- parseInt(formHeight) - parseInt(hyperplayerHeight) - 60}px`
+
+      console.log(hypertranscriptHeight)
+
+      document.getElementById('hypertranscript').style.height = hypertranscriptHeight;
+    }
   </script>
 
   <!-- Comment out the following line if you are using an alternative player. ie SoundCloud or YouTube -->
@@ -361,7 +382,7 @@
   </video>
 
   <div id="hypertranscript" class="hyperaudio-transcript"
-    style="overflow-y:scroll; height:600px; position:relative; border-style:dashed; border-width: 1px; border-color:#999; padding: 8px">
+    style="overflow-y:scroll; flex: auto; min-height: 10px; border-style:dashed; border-width: 1px; border-color:#999; padding: 8px">
 
     <article data-wm="$ilp.uphold.com/123article">
 
@@ -396,6 +417,7 @@
     cap1.init("hypertranscript", "hyperplayer", '37', '21'); // transcript Id, player Id, max chars, min chars for caption line
 
   </script>
+  </box>
 </body>
 
 </html>
