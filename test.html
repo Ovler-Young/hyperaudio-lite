@@ -76,7 +76,7 @@
     };
 
     document.addEventListener('DOMContentLoaded', getparams());
-    window.onresize = updateHeight;
+    // window.onresize = updateHeight;
 
     document.getElementById('Uploader').addEventListener('change', function (e) {
       var files = Array.from(e.target.files).sort((a, b) => b.name.localeCompare(a.name));
@@ -117,9 +117,9 @@
       videoElement.load();
 
       // fit height
-      setTimeout(() => {
-        updateHeight();
-        }, 2000);
+      // setTimeout(() => {
+      //   updateHeight();
+      //   }, 2000);
     }
 
     function processSubtitles(file) {
