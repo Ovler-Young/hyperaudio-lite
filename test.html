@@ -3,7 +3,17 @@
 
 <!DOCTYPE html>
 <html>
+  <style type="text/css" media="screen">
 
+    #stage{background:#eee;width:300px;height:300px;overflow:hidden;
+           position:relative;margin:2em 0;object-fit: cover;}
+    #stage span{font-size:20px;color:#666;display:block;padding:2em;}
+    video{width:400px;height:300px;position:absolute;top:0;left:0;}
+    #controls{position:relative;width:400px;}
+    #change{position:absolute;right:-100px;top:-300px;width:100px;}
+    button{font-size:150%;text-align:center;display:block;}
+    #change button{width:60px;border:none;background:#fff;}
+  </style>
 <head>
   <meta charset="utf-8">
   <title>Hyperaudio - BBCRD | Education | Ethics of personal data in the era of QS and IoT</title>
@@ -58,7 +68,7 @@
         return;
       }
       var y = document.getElementById("customRatio");
-      var video = document.getElementById("hyperplayer");
+      var video = document.getElementById("stage");
 
       if (x === "custom") {
         y.style.display = "block";
@@ -204,9 +214,13 @@
   </script>
 
   <!-- Comment out the following line if you are using an alternative player. ie SoundCloud or YouTube -->
-  <video id="hyperplayer" class="hyperaudio-player" style="z-index: 5000000; object-fit: cover; position:sticky; width:100%" controls>
+  <div id="stage" >
+  <video id="hyperplayer" class="hyperaudio-player" style="z-index: 5000000;"controls>
     <track id="hyperplayer-vtt" label="English" kind="subtitles" srclang="en" src="">
   </video>
+</div>
+<div id="controls"></div>
+
 
   <div id="hypertranscript" class="hyperaudio-transcript"
     style="overflow-y:scroll; flex: auto; min-height: 10px; height:40vh; border-style:dashed; border-width: 1px; border-color:#999; padding: 8px">
@@ -226,6 +240,7 @@
   <script src="js/share-this-clipboard.js"></script>
   <script src="js/caption.js"></script>
   <script src="js/subtitle.js"></script>
+  <script src="js/transformvideo.js"></script>
   <script>
 
     // minimizedMode is still experimental - it aims to show the current words in the title, which can be seen on the browser tab.
