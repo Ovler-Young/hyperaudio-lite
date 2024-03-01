@@ -31,12 +31,57 @@
     <!-- comment out the following line if you don't need playback rate controls -->
     Playback Rate <span id="currentPbr">1</span><input id="pbr" type="range" value="1" min="0.5" max="3" step="0.1">
     <!-- Add a file uploader-->
-    <span style="border: 1px solid #ccc; padding: 5px; margin: 5px 0">
+    <span style="border: 1px solid #ccc; padding: 5px; margin: 5px 0" id="fileUploader">
       <label for="Uploader">Up</label>
       <input id="Uploader" type="file" accept=".json,.mp4" multiple>
     </span>
+    <select id="videoRatio" onclick="changeRatio()">
+      <option value="unset">Change Video Ratio</option>
+      <option value="3:2">3:2</option>
+      <option value="4:3">4:3</option>
+      <option value="16:9">16:9</option>
+      <option value="1:1">1:1</option>
+      <option value="custom">Custom</option>
+    </select>
+    <input type="text" id="customRatio" oninput="changeRatio()" style="display: none;" placeholder="Enter ratio (e.g., 4:3)">
   </form>
   </p>
+  <script>
+    var debounceTimeout;
+    window.addEventListener('resize', function () {
+      clearTimeout(debounceTimeout);
+      debounceTimeout = setTimeout(changeRatio, 100);
+    });
+    function changeRatio() {
+      var x = document.getElementById("videoRatio").value;
+      if (x === "unset") {
+        return;
+      }
+      var y = document.getElementById("customRatio");
+      var video = document.getElementById("hyperplayer");
+
+      if (x === "custom") {
+        y.style.display = "block";
+      } else {
+        y.style.display = "none";
+        // Here you can add the logic to change the video ratio based on the selected value
+        setVideoRatio(x, video);
+      }
+
+      if (y.value !== "" && x === "custom") {
+        // Here you can add the logic to change the video ratio based on the manually entered value
+        setVideoRatio(y.value, video);
+      }
+    }
+
+    function setVideoRatio(ratio, video) {
+      var [width, height] = ratio.split(':');
+      var aspectRatio = height / width;
+      video.style.height = `${video.offsetWidth * aspectRatio}px`;
+      updateHeight();
+    }
+  </script>
+
 
   <script>
     function getparams() {
@@ -159,7 +204,7 @@
   </script>
 
   <!-- Comment out the following line if you are using an alternative player. ie SoundCloud or YouTube -->
-  <video id="hyperplayer" class="hyperaudio-player" style="z-index: 5000000; position:sticky; width:100%" controls>
+  <video id="hyperplayer" class="hyperaudio-player" style="z-index: 5000000; object-fit: cover; position:sticky; width:100%" controls>
     <track id="hyperplayer-vtt" label="English" kind="subtitles" srclang="en" src="">
   </video>
 
