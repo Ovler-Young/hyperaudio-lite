@@ -73,6 +73,11 @@
           processVideo(videoUrl);
         }, 500);
       }
+
+      if (videoUrl && subtitleUrl) {
+        // hide the file uploader
+        document.getElementById('fileUploader').style.display = 'none';
+      }
     };
 
     document.addEventListener('DOMContentLoaded', getparams());
