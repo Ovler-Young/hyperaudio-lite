@@ -111,7 +111,6 @@
       if (guide.style.display === 'none') {
         guide.style.display = 'block';
       }
-      console.log(`video: ${video.videoWidth} x ${video.videoHeight}`);
       let rect = video.getBoundingClientRect();
       let x = e.clientX - rect.left;
       let y = e.clientY - rect.top;
@@ -249,16 +248,9 @@
   
     function updateHeight() {
       let boxHeight = window.getComputedStyle(document.getElementById('Thebox')).height;
-      console.log(boxHeight)
       let formHeight = window.getComputedStyle(document.getElementById('searchForm')).height;
-      console.log(formHeight)
       let hyperplayerHeight = window.getComputedStyle(document.getElementById('hyperplayer')).height;
-      console.log(hyperplayerHeight)
-
       let hypertranscriptHeight =  `${parseInt(boxHeight)- parseInt(formHeight) - parseInt(hyperplayerHeight) - 60}px`
-
-      console.log(hypertranscriptHeight)
-
       document.getElementById('hypertranscript').style.height = hypertranscriptHeight;
     }
   </script>
