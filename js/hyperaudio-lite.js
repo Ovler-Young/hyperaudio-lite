@@ -576,43 +576,32 @@ class HyperaudioLite {
 
   scrollToParagraph = (currentParentElementIndex, index) => {
     let newPara = false;
-    let scrollNode = this.wordArr[index - 1].n.parentNode;
-
-    if (scrollNode !== null && scrollNode.tagName != 'P') {
-      // it's not inside a para so just use the element
-      scrollNode = this.wordArr[index - 1].n;
-    }
-
-    if (currentParentElementIndex != this.parentElementIndex) {
-
-      if (typeof this.scroller !== 'undefined' && this.autoscroll === true) {
-        if (scrollNode !== null) {
-          if (typeof this.scrollerContainer !== 'undefined' && this.scrollerContainer !== null) {
-            this.scroller(scrollNode, 'scroll', {
-              container: this.scrollerContainer,
-              duration: this.scrollerDuration,
-              delay: this.scrollerDelay,
-              offset: this.scrollerOffset,
-            });
-          } else {
-            this.scroller(scrollNode, 'scroll', {
-              duration: this.scrollerDuration,
-              delay: this.scrollerDelay,
-              offset: this.scrollerOffset,
-            });
-          }
-        } else {
-          // the wordlst needs refreshing
-          let words = this.transcript.querySelectorAll('[data-m]');
-          this.wordArr = this.createWordArray(words);
-          this.parentElements = this.transcript.getElementsByTagName(this.parentTag);
-        }
+    let scrollNode = this.wordArr[index - 1].n;
+  
+    if (scrollNode !== null) {
+      // 检查scrollNode是否在段落内
+      if (scrollNode.parentNode.tagName.toLowerCase() !== 'p') {
+        // 不在段落内,使用scrollNode本身
+        scrollNode = this.wordArr[index - 1].n;
+      } else {
+        // 在段落内,使用段落元素
+        scrollNode = scrollNode.parentNode;
       }
-
-      newPara = true;
-      this.parentElementIndex = currentParentElementIndex;
+  
+      if (currentParentElementIndex !== this.parentElementIndex) {
+        newPara = true;
+        this.parentElementIndex = currentParentElementIndex;
+      }
+  
+      // 使用scrollIntoView方法滚动到指定元素位置
+      scrollNode.scrollIntoView({
+        behavior: 'smooth', // 平滑滚动
+        block: 'start', // 将元素滚动到视口的最近位置
+        inline: 'nearest' // 水平方向也滚动到最近位置
+      });
     }
-    return(newPara);
+  
+    return newPara;
   }
 
   checkStatus = () => {

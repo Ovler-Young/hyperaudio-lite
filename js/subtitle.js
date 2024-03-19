@@ -204,8 +204,8 @@ function processSubtitles(file) {
     for (const segment of data.segments) {
       // Iterate over the words in each segment
       for (const word of segment.words) {
-        // If the start time of the current word is more than 2 seconds after the end time of the last word, add a new paragraph
-        if (word.start - lastEndTime > 2) {
+        // If the start time of the current word is more than 1 seconds after the end time of the last word, add a new paragraph
+        if (word.start - lastEndTime > 0.25) {
           outputString += '</p><p>';
         } else if (word.start - lastEndTime > 0.4) {
           outputString += `<span data-m="${Math.round(word.start * 1000)}" data-d="400">，</span>`;
