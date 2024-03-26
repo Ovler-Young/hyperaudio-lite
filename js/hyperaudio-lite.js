@@ -591,14 +591,15 @@ class HyperaudioLite {
       if (currentParentElementIndex !== this.parentElementIndex) {
         newPara = true;
         this.parentElementIndex = currentParentElementIndex;
+
+        // 使用scrollIntoView方法滚动到指定元素位置
+        scrollNode.scrollIntoView({
+          behavior: 'smooth', // 平滑滚动
+          block: 'center', // 将元素滚动到视口的最近位置 尽可能居中
+          inline: 'nearest' // 水平方向也滚动到最近位置
+        });
       }
   
-      // 使用scrollIntoView方法滚动到指定元素位置
-      scrollNode.scrollIntoView({
-        behavior: 'smooth', // 平滑滚动
-        block: 'start', // 将元素滚动到视口的最近位置
-        inline: 'nearest' // 水平方向也滚动到最近位置
-      });
     }
   
     return newPara;
