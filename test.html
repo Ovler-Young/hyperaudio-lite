@@ -146,18 +146,8 @@
     function getparams() {
       var params = new URLSearchParams(window.location.search);
       var videoUrl = params.get('video');
-      console.log(videoUrl);
-      // 有部分中文字符会被转义，需要解码两次
-      videoUrl = decodeURIComponent(decodeURIComponent(videoUrl));
-      console.log(videoUrl);
       var subtitleUrl = params.get('subtitle');
-      console.log(subtitleUrl);
-      // 有部分中文字符会被转义，需要解码两次
-      subtitleUrl = decodeURIComponent(decodeURIComponent(subtitleUrl));
-      console.log(subtitleUrl);
       if (subtitleUrl) {
-        // decode the subtitle URL
-        subtitleUrl = decodeURIComponent(decodeURIComponent(subtitleUrl));
         fetch(subtitleUrl)
           .then(response => response.text())
           .then(content => {
