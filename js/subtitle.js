@@ -238,7 +238,6 @@ function processSubtitles(file) {
     }
 
     outputString += '</p>';
-    console.log(outputString);
     insertSubtitles(outputString);
     new HyperaudioLite("hypertranscript", "hyperplayer", minimizedMode, autoScroll, doubleClick, webMonetization, playOnClick);
   }

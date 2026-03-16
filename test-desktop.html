@@ -410,12 +410,19 @@
     let cap1 = caption();
     cap1.init("hypertranscript", "hyperplayer", captionMaxLen, captionMinLen);
 
-    // Reprocess subtitles with current parameters
+    // Reprocess subtitles with current parameters (without reloading video)
     var reprocessTimer = null;
     function reprocessSubtitles() {
       if (!lastSubtitleContent || !lastSubtitleType) return;
       clearTimeout(reprocessTimer);
       reprocessTimer = setTimeout(function() {
+        // Temporarily remove data-media-src so HyperaudioLite won't reset video src
+        var section = document.querySelector('article section[data-media-src]');
+        var savedSrc = null;
+        if (section) {
+          savedSrc = section.getAttribute('data-media-src');
+          section.removeAttribute('data-media-src');
+        }
         switch (lastSubtitleType) {
           case '.srt': processSRT(lastSubtitleContent); break;
           case '.json': processJSON(lastSubtitleContent); break;
@@ -423,6 +430,10 @@
         }
         cap1 = caption();
         cap1.init("hypertranscript", "hyperplayer", captionMaxLen, captionMinLen);
+        // Restore data-media-src
+        if (savedSrc) {
+          document.querySelector('article section').setAttribute('data-media-src', savedSrc);
+        }
       }, 100);
     }
 
