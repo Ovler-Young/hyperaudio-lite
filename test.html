@@ -9,6 +9,7 @@
   <title>Hyperaudio - BBCRD | Education | Ethics of personal data in the era of QS and IoT</title>
   <link rel="stylesheet" href="css/hyperaudio-lite-player.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/velocity/1.5.0/velocity.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"></script>
   <style>
     /* uncomment the following CSS for active parent / word indicator */
 
@@ -33,7 +34,7 @@
     <!-- Add a file uploader-->
     <span style="border: 1px solid #ccc; padding: 5px; margin: 5px 0" id="fileUploader">
       <label for="Uploader">Up</label>
-      <input id="Uploader" type="file" accept=".json,.mp4" multiple>
+      <input id="Uploader" type="file" accept="video/*,audio/*,.json,.srt,.vtt,.mkv,.flv,.avi,.wmv,.mov,.webm,.ts,.m2ts" multiple>
     </span>
     <select id="videoRatio" onclick="changeRatio()">
       <option value="unset">Change Video Ratio</option>
@@ -171,9 +172,10 @@
       }
 
       if (videoUrl) {
+        var videoExt = videoUrl.substring(videoUrl.lastIndexOf('.')).split('?')[0].toLowerCase();
         // sleep 0.5 second to wait for the subtitle to be loaded
         setTimeout(() => {
-          processVideo(videoUrl);
+          processVideo(videoUrl, videoExt);
         }, 500);
       }
 
@@ -190,24 +192,29 @@
       var files = Array.from(e.target.files).sort((a, b) => b.name.localeCompare(a.name));
 
       var videoFile, subtitleFile;
+      var subtitleExts = ['.json', '.vtt', '.srt'];
+      var videoExts = ['.mp4', '.webm', '.ogg', '.ogv', '.mkv', '.flv', '.avi', '.wmv', '.mov', '.ts', '.m2ts', '.mp3', '.wav', '.m4a', '.aac', '.flac'];
       files.forEach(file => {
-        if (file.type.startsWith('video/') || file.type.startsWith('audio/')) {
-          // Check if the file is a video or audio file
+        var ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+        if (file.type.startsWith('video/') || file.type.startsWith('audio/') || videoExts.includes(ext)) {
           videoFile = file;
-        } else if (['application/json', 'text/vtt', 'application/x-subrip'].includes(file.type)) {
+        } else if (['application/json', 'text/vtt', 'application/x-subrip'].includes(file.type) || subtitleExts.includes(ext)) {
           subtitleFile = file;
         }
       });
 
       if (videoFile) {
-        processVideo(URL.createObjectURL(videoFile));
+        var ext = videoFile.name.substring(videoFile.name.lastIndexOf('.')).toLowerCase();
+        processVideo(URL.createObjectURL(videoFile), ext);
       }
       if (subtitleFile) {
         processSubtitles(subtitleFile);
       }
     });
 
-    function processVideo(url) {
+    var mpegtsPlayer = null;
+
+    function processVideo(url, ext) {
       // Create a new section element
       var newSection = document.createElement('section');
       newSection.setAttribute('data-media-src', url);
@@ -218,17 +225,30 @@
       // Insert the new section at the top of the article
       articleElement.insertBefore(newSection, articleElement.firstChild);
 
-      // Get the video element and set its src attribute
+      // Get the video element
       var videoElement = document.getElementById('hyperplayer');
-      videoElement.setAttribute('src', url);
 
-      // Load the video
-      videoElement.load();
+      // Destroy previous mpegts player if exists
+      if (mpegtsPlayer) {
+        mpegtsPlayer.destroy();
+        mpegtsPlayer = null;
+      }
 
-      // fit height
-      // setTimeout(() => {
-      //   updateHeight();
-      //   }, 2000);
+      var mpegtsExts = ['.flv', '.ts', '.m2ts'];
+      if (mpegtsExts.includes(ext) && typeof mpegts !== 'undefined' && mpegts.isSupported()) {
+        // Use mpegts.js for FLV/TS formats
+        videoElement.removeAttribute('src');
+        mpegtsPlayer = mpegts.createPlayer({
+          type: ext === '.flv' ? 'flv' : 'mpegts',
+          url: url
+        });
+        mpegtsPlayer.attachMediaElement(videoElement);
+        mpegtsPlayer.load();
+      } else {
+        // Native playback for supported formats
+        videoElement.setAttribute('src', url);
+        videoElement.load();
+      }
     }
 
     function insertSubtitles(content) {
