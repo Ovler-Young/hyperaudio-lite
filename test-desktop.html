@@ -124,6 +124,20 @@
       height: auto !important;
       overflow-y: scroll;
     }
+
+    .slide-thumbnail {
+      display: block;
+      width: 100%;
+      height: auto;
+      cursor: pointer;
+      border: 2px solid #ccc;
+      border-radius: 4px;
+      margin: 8px 0;
+      transition: border-color 0.2s;
+    }
+    .slide-thumbnail:hover {
+      border-color: #66f;
+    }
   </style>
 </head>
 
@@ -373,6 +387,10 @@
               <input id="minLenSlider" type="range" value="21" min="5" max="60" step="1" style="width: 160px;">
             </div>
           </div>
+          <div style="border-top: 1px solid #eee; padding-top: 4px;">
+            <button id="detectSlidesBtn" type="button">Detect Slides</button>
+            <span id="slideDetectStatus" style="margin-left: 8px; font-size: 12px; color: #666;"></span>
+          </div>
         </div>
         <article data-wm="$ilp.uphold.com/123article">
           <section data-media-src="https://lab.hyperaud.io/video/BBC/education.mp4" data-wm="$ilp.uphold.com/123section">
@@ -389,6 +407,7 @@
   <script src="js/share-this-clipboard.js"></script>
   <script src="js/caption.js"></script>
   <script src="js/subtitle.js"></script>
+  <script src="js/slide-detect.js"></script>
   <script>
     let minimizedMode = false;
     let autoScroll = true;
@@ -416,6 +435,7 @@
       if (!lastSubtitleContent || !lastSubtitleType) return;
       clearTimeout(reprocessTimer);
       reprocessTimer = setTimeout(function() {
+        var hadThumbs = !!document.querySelector('#hypertranscript .slide-thumbnail');
         // Temporarily remove data-media-src so HyperaudioLite won't reset video src
         var section = document.querySelector('article section[data-media-src]');
         var savedSrc = null;
@@ -433,6 +453,10 @@
         // Restore data-media-src
         if (savedSrc) {
           document.querySelector('article section').setAttribute('data-media-src', savedSrc);
+        }
+        if (hadThumbs) {
+          var statusEl = document.getElementById('slideDetectStatus');
+          if (statusEl) statusEl.textContent = 'Thumbnails removed — re-run Detect Slides.';
         }
       }, 100);
     }
@@ -457,6 +481,44 @@
       captionMinLen = parseInt(this.value);
       document.getElementById('currentMinLen').textContent = this.value;
       reprocessSubtitles();
+    });
+
+    // Slide detection button
+    document.getElementById('detectSlidesBtn').addEventListener('click', function() {
+      var video = document.getElementById('hyperplayer');
+      var section = document.querySelector('#hypertranscript article section');
+      var statusEl = document.getElementById('slideDetectStatus');
+      var btn = this;
+
+      if (!video.duration || !section.querySelector('span[data-m]')) {
+        statusEl.textContent = 'Please load video and subtitles first.';
+        return;
+      }
+
+      btn.disabled = true;
+      statusEl.textContent = 'Detecting...';
+
+      detectSlideChanges(video, section, function(msg) {
+        statusEl.textContent = msg;
+      }).then(function(count) {
+        statusEl.textContent = 'Found ' + count + ' slide change(s).';
+        btn.disabled = false;
+      }).catch(function(err) {
+        statusEl.textContent = 'Error: ' + err.message;
+        btn.disabled = false;
+        console.error(err);
+      });
+    });
+
+    // Thumbnail click → seek video and play
+    document.getElementById('hypertranscript').addEventListener('click', function(e) {
+      if (e.target.classList.contains('slide-thumbnail')) {
+        e.stopPropagation();
+        var timeMs = parseInt(e.target.getAttribute('data-slide-time'));
+        var video = document.getElementById('hyperplayer');
+        video.currentTime = timeMs / 1000;
+        video.play().catch(function() {});
+      }
     });
   </script>
 
