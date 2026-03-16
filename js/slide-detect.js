@@ -228,8 +228,8 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
       return 0;
     }
 
-    // Phase 5: Capture full-res thumbnails and insert into DOM
-    // Remove any previously inserted thumbnails
+    // Phase 5: Capture full-res thumbnails
+    // Remove any previously inserted thumbnails from transcript
     var oldThumbs = sectionEl.querySelectorAll('.slide-thumbnail');
     for (var ri = 0; ri < oldThumbs.length; ri++) {
       oldThumbs[ri].parentNode.removeChild(oldThumbs[ri]);
@@ -237,29 +237,30 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
 
     onStatus('Capturing ' + transitions.length + ' thumbnail(s)...');
 
-    // Insert in reverse order so DOM positions remain stable
-    for (var ti = transitions.length - 1; ti >= 0; ti--) {
+    // Capture all thumbnails in order (store data for both transcript and filmstrip)
+    var slideData = []; // { timeMs, dataUrl }
+    for (var ti = 0; ti < transitions.length; ti++) {
       var slideTime = transitions[ti];
       var captureTime = Math.min(slideTime + 0.5, duration - 0.1);
-      onStatus('Capturing thumbnail ' + (transitions.length - ti) + '/' + transitions.length + '...');
+      onStatus('Capturing thumbnail ' + (ti + 1) + '/' + transitions.length + '...');
 
-      // Capture thumbnail
       await seekAndCapture(captureTime, thumbCtx, thumbW, thumbH);
       var dataUrl = thumbCanvas.toDataURL('image/jpeg', THUMB_QUALITY);
+      slideData.push({ timeMs: Math.round(slideTime * 1000), dataUrl: dataUrl });
+    }
 
-      // Find insertion point
-      var timeMs = Math.round(slideTime * 1000);
-      var insertPoint = findInsertionPoint(timeMs);
+    // Insert into transcript (reverse order so DOM positions remain stable)
+    for (var ti = slideData.length - 1; ti >= 0; ti--) {
+      var sd = slideData[ti];
+      var insertPoint = findInsertionPoint(sd.timeMs);
       if (!insertPoint) continue;
 
-      // Create thumbnail element
       var img = document.createElement('img');
-      img.src = dataUrl;
+      img.src = sd.dataUrl;
       img.className = 'slide-thumbnail';
-      img.setAttribute('data-slide-time', String(timeMs));
-      img.title = 'Slide @ ' + formatTimeForTitle(slideTime);
+      img.setAttribute('data-slide-time', String(sd.timeMs));
+      img.title = 'Slide @ ' + formatTimeForTitle(sd.timeMs / 1000);
 
-      // Insert at the correct position
       if (insertPoint.insertBefore) {
         insertPoint.node.parentNode.insertBefore(img, insertPoint.node);
       } else if (insertPoint.node.nextSibling) {
@@ -268,6 +269,9 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
         insertPoint.node.parentNode.appendChild(img);
       }
     }
+
+    // Phase 6: Populate filmstrip in #zoom-subtitle
+    setupFilmstrip(videoEl, slideData);
 
     // Restore video state
     videoEl.currentTime = savedTime;
@@ -286,4 +290,112 @@ function formatTimeForTitle(seconds) {
   var m = Math.floor(seconds / 60);
   var s = Math.floor(seconds % 60);
   return m + ':' + (s < 10 ? '0' : '') + s;
+}
+
+/**
+ * Populate the filmstrip below the video with slide thumbnails.
+ * Keeps the active slide at roughly the 2nd position from the left,
+ * auto-scrolling as the video plays.
+ *
+ * @param {HTMLVideoElement} videoEl
+ * @param {Array<{timeMs: number, dataUrl: string}>} slideData - sorted by timeMs
+ */
+function setupFilmstrip(videoEl, slideData) {
+  var zoomEl = document.getElementById('zoom-subtitle');
+  if (!zoomEl || slideData.length === 0) return;
+
+  // Switch to filmstrip mode
+  zoomEl.classList.add('filmstrip-mode');
+
+  // Preserve the playback rate overlay
+  var pbrOverlay = document.getElementById('pbr-overlay');
+
+  // Clear existing content (zoom subtitle text) but keep overlay
+  while (zoomEl.firstChild) zoomEl.removeChild(zoomEl.firstChild);
+
+  // Create thumbnail images
+  var thumbEls = [];
+  for (var i = 0; i < slideData.length; i++) {
+    var img = document.createElement('img');
+    img.src = slideData[i].dataUrl;
+    img.className = 'filmstrip-thumb';
+    img.setAttribute('data-slide-time', String(slideData[i].timeMs));
+    img.setAttribute('data-slide-index', String(i));
+    img.title = 'Slide ' + (i + 1) + ' @ ' + formatTimeForTitle(slideData[i].timeMs / 1000);
+    zoomEl.appendChild(img);
+    thumbEls.push(img);
+  }
+
+  // Re-append the playback rate overlay so it stays on top
+  if (pbrOverlay) zoomEl.appendChild(pbrOverlay);
+
+  // Click handler for filmstrip thumbnails
+  zoomEl.addEventListener('click', function(e) {
+    if (e.target.classList.contains('filmstrip-thumb')) {
+      var timeMs = parseInt(e.target.getAttribute('data-slide-time'));
+      videoEl.currentTime = timeMs / 1000;
+      videoEl.play().catch(function() {});
+    }
+  });
+
+  // Convert vertical mouse wheel to horizontal scroll
+  zoomEl.addEventListener('wheel', function(e) {
+    if (e.deltaY !== 0) {
+      e.preventDefault();
+      zoomEl.scrollLeft += e.deltaY;
+    }
+  }, { passive: false });
+
+  // Track active slide and auto-scroll
+  var lastActiveIndex = -1;
+
+  function updateActiveSlide() {
+    var currentMs = videoEl.currentTime * 1000;
+
+    // Find the active slide: last one whose timeMs <= currentMs
+    var activeIndex = -1;
+    for (var i = 0; i < slideData.length; i++) {
+      if (slideData[i].timeMs <= currentMs) {
+        activeIndex = i;
+      } else {
+        break;
+      }
+    }
+
+    if (activeIndex === lastActiveIndex) return;
+    lastActiveIndex = activeIndex;
+
+    // Update active class
+    for (var j = 0; j < thumbEls.length; j++) {
+      if (j === activeIndex) {
+        thumbEls[j].classList.add('active');
+      } else {
+        thumbEls[j].classList.remove('active');
+      }
+    }
+
+    // Auto-scroll: keep active at ~2nd position from left
+    if (activeIndex >= 0) {
+      // Target: scroll so that one thumbnail is visible to the left of the active one
+      var targetIndex = Math.max(0, activeIndex - 1);
+      var targetEl = thumbEls[targetIndex];
+      zoomEl.scrollTo({
+        left: targetEl.offsetLeft - zoomEl.offsetLeft,
+        behavior: 'smooth'
+      });
+    }
+  }
+
+  videoEl.addEventListener('timeupdate', updateActiveSlide);
+
+  // Also update immediately
+  updateActiveSlide();
+
+  // Store cleanup function so it can be called if detection is re-run
+  if (window._filmstripCleanup) {
+    window._filmstripCleanup();
+  }
+  window._filmstripCleanup = function() {
+    videoEl.removeEventListener('timeupdate', updateActiveSlide);
+  };
 }

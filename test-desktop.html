@@ -80,6 +80,41 @@
       border-top: 1px solid #ddd;
       min-height: 0;
     }
+    /* When filmstrip is active, switch to horizontal scroll layout */
+    #zoom-subtitle.filmstrip-mode {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 6px;
+      gap: 4px;
+      justify-content: flex-start;
+      align-items: stretch;
+      scroll-behavior: auto;
+    }
+    #zoom-subtitle.filmstrip-mode::-webkit-scrollbar {
+      height: 4px;
+    }
+    #zoom-subtitle.filmstrip-mode::-webkit-scrollbar-thumb {
+      background: #aaa;
+      border-radius: 2px;
+    }
+    .filmstrip-thumb {
+      flex-shrink: 0;
+      height: 100%;
+      width: auto;
+      cursor: pointer;
+      border: 2px solid transparent;
+      border-radius: 3px;
+      opacity: 0.6;
+      transition: opacity 0.2s, border-color 0.2s;
+    }
+    .filmstrip-thumb:hover {
+      opacity: 1;
+      border-color: #999;
+    }
+    .filmstrip-thumb.active {
+      opacity: 1;
+      border-color: #44f;
+    }
     .portrait #zoom-subtitle {
       display: none;
     }
@@ -457,6 +492,18 @@
         if (hadThumbs) {
           var statusEl = document.getElementById('slideDetectStatus');
           if (statusEl) statusEl.textContent = 'Thumbnails removed — re-run Detect Slides.';
+          // Reset filmstrip back to zoom subtitle mode
+          var zoomEl = document.getElementById('zoom-subtitle');
+          if (zoomEl) {
+            zoomEl.classList.remove('filmstrip-mode');
+            while (zoomEl.firstChild) zoomEl.removeChild(zoomEl.firstChild);
+            var pbrOverlay = document.getElementById('pbr-overlay');
+            if (pbrOverlay) zoomEl.appendChild(pbrOverlay);
+          }
+          if (window._filmstripCleanup) {
+            window._filmstripCleanup();
+            window._filmstripCleanup = null;
+          }
         }
       }, 100);
     }
@@ -604,6 +651,9 @@
 
       var lastContent = '';
       var observer = new MutationObserver(function() {
+        // Don't overwrite filmstrip thumbnails with text
+        if (zoomEl.classList.contains('filmstrip-mode')) return;
+
         var activePara = transcript.querySelector('p.active, section.active, div.active');
         if (activePara) {
           var text = activePara.textContent;
