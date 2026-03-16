@@ -194,29 +194,34 @@ function processSubtitles(file) {
   }
 
   function processJSON(content) {
-    // Parse the JSON content
     const data = JSON.parse(content);
-    // Initialize the output string with the opening tags
-    let outputString = '<p>start';
-    // Initialize the end time of the last word
-    let lastEndTime = 0;
-    // Iterate over the segments
-    for (const segment of data.segments) {
-      // Iterate over the words in each segment
-      for (const word of segment.words) {
-        // If the start time of the current word is more than 1 seconds after the end time of the last word, add a new paragraph
-        if (word.start - lastEndTime > 0.25) {
-          outputString += '</p><p>';
-        } else if (word.start - lastEndTime > 0.4) {
-          outputString += `<span data-m="${Math.round(word.start * 1000)}" data-d="400">，</span>`;
-        }
-        // Add a span element for the current word
-        outputString += `<span data-m="${Math.round(word.start * 1000)}" data-d="${Math.round((word.end - word.start) * 1000)}">${/^[a-zA-Z]+$/.test(word.word) ? word.word + ' ' : word.word}</span>`;
-        // Update the end time of the last word
-        lastEndTime = word.end;
-      }
+
+    // Normalize to flat word array
+    let words;
+    if (Array.isArray(data)) {
+      // Flat array format: [{ text, start, end }]
+      words = data.map(w => ({ word: w.text, start: w.start, end: w.end }));
+    } else if (data.segments) {
+      // Nested format: { segments: [{ words: [{ word, start, end }] }] }
+      words = data.segments.flatMap(seg => seg.words);
+    } else {
+      console.error('Unsupported JSON format');
+      return;
     }
-    // Add the closing tags
+
+    let outputString = '<p>start';
+    let lastEndTime = 0;
+
+    for (const word of words) {
+      if (word.start - lastEndTime > 0.25) {
+        outputString += '</p><p>';
+      } else if (word.start - lastEndTime > 0.4) {
+        outputString += `<span data-m="${Math.round(word.start * 1000)}" data-d="400">，</span>`;
+      }
+      outputString += `<span data-m="${Math.round(word.start * 1000)}" data-d="${Math.round((word.end - word.start) * 1000)}">${/^[a-zA-Z]+$/.test(word.word) ? word.word + ' ' : word.word}</span>`;
+      lastEndTime = word.end;
+    }
+
     outputString += '</p>';
     console.log(outputString);
     insertSubtitles(outputString);
