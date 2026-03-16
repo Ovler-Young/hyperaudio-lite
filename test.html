@@ -191,7 +191,8 @@
 
       var videoFile, subtitleFile;
       files.forEach(file => {
-        if (file.type.startsWith('video/')) {
+        if (file.type.startsWith('video/') || file.type.startsWith('audio/')) {
+          // Check if the file is a video or audio file
           videoFile = file;
         } else if (['application/json', 'text/vtt', 'application/x-subrip'].includes(file.type)) {
           subtitleFile = file;
