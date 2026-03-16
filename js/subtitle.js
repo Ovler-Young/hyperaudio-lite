@@ -18,6 +18,9 @@ function processSubtitles(file) {
         case '.json':
           processJSON(content);
           break;
+        case '.ass':
+          processASS(content);
+          break;
         default:
           console.log('Maybe Unsupported subtitle format');
           break;
@@ -237,6 +240,111 @@ function processSubtitles(file) {
       lastEndTime = word.end;
     }
 
+    outputString += '</p>';
+    insertSubtitles(outputString);
+    new HyperaudioLite("hypertranscript", "hyperplayer", minimizedMode, autoScroll, doubleClick, webMonetization, playOnClick);
+  }
+
+  function processASS(content) {
+    if (typeof lastSubtitleContent !== 'undefined') {
+      lastSubtitleContent = content;
+      lastSubtitleType = '.ass';
+    }
+
+    var lines = content.split(/(?:\r\n|\r|\n)/gm);
+    var len = lines.length;
+    var outputString = '<p>';
+    var lineBreaks = true;
+    var ltime = 0;
+    var ltext;
+
+    var toSeconds = function(t_in) {
+      if (!t_in) return 0;
+      var t = t_in.split(':');
+      try {
+        var s = t[2].split('.');
+        return (
+          parseFloat(t[0], 10) * 3600 +
+          parseFloat(t[1], 10) * 60 +
+          parseFloat(s[0], 10) +
+          parseFloat(s[1], 10) / 100
+        );
+      } catch (e) {
+        return 0;
+      }
+    };
+
+    for (var i = 0; i < len; i++) {
+      var line = lines[i];
+      if (!line.startsWith('Dialogue:')) continue;
+      
+      var parts = line.split(',');
+      if (parts.length < 10) continue;
+
+      var startStr = parts[1].trim();
+      var endStr = parts[2].trim();
+      var textParts = parts.slice(9);
+      var text = textParts.join(',');
+
+      var sub = {};
+      sub.start = toSeconds(startStr);
+      sub.end = toSeconds(endStr);
+
+      text = text.replace(/\{[^}]+\}/g, '');
+      text = text.replace(/\\N/g, ' ');
+      text = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      var splitMode = 0;
+      // Minimal jQuery shim is present in test-desktop.html, but let's be safe
+      var wordLengthSplit = false;
+      if (typeof $ !== 'undefined' && $('#word-length').prop) {
+        wordLengthSplit = $('#word-length').prop('checked');
+      }
+      
+      var swords = text.split(' ');
+      var sduration = sub.end - sub.start;
+      if (sduration <= 0) sduration = 0.1; // fallback
+      var stimeStep = sduration / (swords.length || 1);
+      
+      var swordLengths = [];
+      var totalLetters = 0;
+      for (var si = 0, sl = swords.length; si < sl; ++si) {
+        totalLetters += swords[si].length;
+        swordLengths[si] = swords[si].length;
+      }
+      var letterTime = totalLetters > 0 ? (sduration / totalLetters) : 0;
+      var wordStart = 0;
+
+      for (var si = 0, sl = swords.length; si < sl; ++si) {
+        var wordTime = swordLengths[si] * letterTime;
+        var stime;
+        if (wordLengthSplit) {
+          stime = Math.round((sub.start + si * stimeStep) * 1000);
+        } else {
+          stime = Math.round((wordStart + sub.start) * 1000);
+        }
+
+        wordStart += wordTime;
+        var stext = swords[si];
+
+        var splitTime = typeof paraSplitTime !== 'undefined' ? paraSplitTime : 2;
+        var pPunct = typeof paraPunct !== 'undefined' ? paraPunct : false;
+
+        if (stime - ltime > splitTime * 1000 && splitTime > 0) {
+          var punctPresent = ltext && (ltext.indexOf('.') > 0 || ltext.indexOf('?') > 0 || ltext.indexOf('!') > 0);
+          if (!pPunct || (pPunct && punctPresent)) {
+            outputString += '</p><p>';
+          }
+        }
+
+        outputString += '<span data-m="' + stime + '">' + stext + ' </span>';
+
+        ltime = stime;
+        ltext = stext;
+
+        if (lineBreaks) outputString += '\n';
+      }
+    }
     outputString += '</p>';
     insertSubtitles(outputString);
     new HyperaudioLite("hypertranscript", "hyperplayer", minimizedMode, autoScroll, doubleClick, webMonetization, playOnClick);

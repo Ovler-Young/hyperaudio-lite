@@ -272,6 +272,7 @@
               case '.vtt': processVTT(content); break;
               case '.srt': processSRT(content); break;
               case '.json': processJSON(content); break;
+              case '.ass': processASS(content); break;
               default: console.log('Unsupported subtitle format'); break;
             }
           })
@@ -291,7 +292,7 @@
       document.getElementById('Uploader').addEventListener('change', function (e) {
         var files = Array.from(e.target.files).sort((a, b) => b.name.localeCompare(a.name));
         var videoFile, subtitleFile;
-        var subtitleExts = ['.json', '.vtt', '.srt'];
+        var subtitleExts = ['.json', '.vtt', '.srt', '.ass'];
         var videoExts = ['.mp4', '.webm', '.ogg', '.ogv', '.mkv', '.flv', '.avi', '.wmv', '.mov', '.ts', '.m2ts', '.mp3', '.wav', '.m4a', '.aac', '.flac'];
         files.forEach(file => {
           var ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
@@ -386,7 +387,7 @@
           <div>
             <span style="border: 1px solid #ccc; padding: 5px; margin: 5px 0" id="fileUploader">
               <label for="Uploader">Upload</label>
-              <input id="Uploader" type="file" accept="video/*,audio/*,.json,.srt,.vtt,.mkv,.flv,.avi,.wmv,.mov,.webm,.ts,.m2ts" multiple>
+              <input id="Uploader" type="file" accept="video/*,audio/*,.json,.srt,.vtt,.ass,.mkv,.flv,.avi,.wmv,.mov,.webm,.ts,.m2ts" multiple>
             </span>
             <select id="videoRatio" onclick="changeRatio()">
               <option value="unset">Change Video Ratio</option>
@@ -500,6 +501,7 @@
           case '.srt': processSRT(lastSubtitleContent); break;
           case '.json': processJSON(lastSubtitleContent); break;
           case '.vtt': processVTT(lastSubtitleContent); break;
+          case '.ass': processASS(lastSubtitleContent); break;
         }
         cap1 = caption();
         cap1.init("hypertranscript", "hyperplayer", captionMaxLen, captionMinLen);
