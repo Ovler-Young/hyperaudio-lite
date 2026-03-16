@@ -10,9 +10,9 @@
  * @returns {Promise<number>} Number of slide changes detected
  */
 async function detectSlideChanges(videoEl, sectionEl, onStatus) {
-  var COMPARE_SIZE = 64;
+  var COMPARE_SIZE = 128;
   var COARSE_INTERVAL = 60;
-  var DIFF_THRESHOLD = 15;
+  var DIFF_THRESHOLD = 5;
   var MIN_BINARY_GAP = 0.5;
   var DEDUP_GAP = 2;
   var THUMB_QUALITY = 0.7;
@@ -35,15 +35,15 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
 
   // Thumbnail canvas (larger, video aspect ratio)
   var thumbW = Math.min(videoEl.videoWidth || 640, 640);
-  var thumbH = Math.round(thumbW * (videoEl.videoHeight || 360) / (videoEl.videoWidth || 640));
+  var thumbH = Math.round((thumbW * (videoEl.videoHeight || 360)) / (videoEl.videoWidth || 640));
   var thumbCanvas = document.createElement('canvas');
   thumbCanvas.width = thumbW;
   thumbCanvas.height = thumbH;
   var thumbCtx = thumbCanvas.getContext('2d');
 
   function seekAndCapture(time, ctx, w, h) {
-    return new Promise(function(resolve, reject) {
-      var timeout = setTimeout(function() {
+    return new Promise(function (resolve, reject) {
+      var timeout = setTimeout(function () {
         videoEl.removeEventListener('seeked', onSeeked);
         reject(new Error('Seek timeout at ' + time.toFixed(1) + 's'));
       }, 5000);
@@ -68,8 +68,10 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
   }
 
   function computeDifference(d1, d2) {
-    var p1 = d1.data, p2 = d2.data;
-    var totalDiff = 0, count = 0;
+    var p1 = d1.data,
+      p2 = d2.data;
+    var totalDiff = 0,
+      count = 0;
     for (var i = 0; i < p1.length; i += 4) {
       totalDiff += Math.abs(p1[i] - p2[i]);
       totalDiff += Math.abs(p1[i + 1] - p2[i + 1]);
@@ -169,7 +171,9 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
     }
 
     // Phase 4: Deduplicate
-    transitions.sort(function(a, b) { return a - b; });
+    transitions.sort(function (a, b) {
+      return a - b;
+    });
     var deduped = [];
     for (var di = 0; di < transitions.length; di++) {
       if (deduped.length === 0 || transitions[di] - deduped[deduped.length - 1] > DEDUP_GAP) {
@@ -181,7 +185,7 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
     if (transitions.length === 0) {
       onStatus('No slide changes detected.');
       videoEl.currentTime = savedTime;
-      if (!wasPaused) videoEl.play().catch(function() {});
+      if (!wasPaused) videoEl.play().catch(function () {});
       return 0;
     }
 
@@ -228,13 +232,13 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
 
     // Restore video state
     videoEl.currentTime = savedTime;
-    if (!wasPaused) videoEl.play().catch(function() {});
+    if (!wasPaused) videoEl.play().catch(function () {});
 
     return transitions.length;
   } catch (err) {
     // Restore video state on error
     videoEl.currentTime = savedTime;
-    if (!wasPaused) videoEl.play().catch(function() {});
+    if (!wasPaused) videoEl.play().catch(function () {});
     throw err;
   }
 }
