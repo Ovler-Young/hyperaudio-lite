@@ -31,6 +31,11 @@ function processSubtitles(file) {
   }
 
   function processSRT(content) {
+    // Store for reprocessing
+    if (typeof lastSubtitleContent !== 'undefined') {
+      lastSubtitleContent = content;
+      lastSubtitleType = '.srt';
+    }
     // code taken from https://github.com/hyperaudio/ha-converter/blob/master/src/converter.js
     var i = 0,
       len = 0,
@@ -194,31 +199,41 @@ function processSubtitles(file) {
   }
 
   function processJSON(content) {
-    const data = JSON.parse(content);
+    // Store for reprocessing
+    if (typeof lastSubtitleContent !== 'undefined') {
+      lastSubtitleContent = content;
+      lastSubtitleType = '.json';
+    }
+    var data = JSON.parse(content);
+    var words;
+    var paraSplit, commaSplit, outputString, lastEndTime, wi, word, gap;
 
     // Normalize to flat word array
-    let words;
     if (Array.isArray(data)) {
       // Flat array format: [{ text, start, end }]
-      words = data.map(w => ({ word: w.text, start: w.start, end: w.end }));
+      words = data.map(function(w) { return { word: w.text, start: w.start, end: w.end }; });
     } else if (data.segments) {
       // Nested format: { segments: [{ words: [{ word, start, end }] }] }
-      words = data.segments.flatMap(seg => seg.words);
+      words = data.segments.flatMap(function(seg) { return seg.words; });
     } else {
       console.error('Unsupported JSON format');
       return;
     }
 
-    let outputString = '<p>start';
-    let lastEndTime = 0;
+    paraSplit = (typeof jsonSplitTime !== 'undefined') ? jsonSplitTime : 0.25;
+    commaSplit = paraSplit * 0.6;
+    outputString = '<p>start';
+    lastEndTime = 0;
 
-    for (const word of words) {
-      if (word.start - lastEndTime > 0.25) {
+    for (wi = 0; wi < words.length; wi++) {
+      word = words[wi];
+      gap = word.start - lastEndTime;
+      if (gap > paraSplit) {
         outputString += '</p><p>';
-      } else if (word.start - lastEndTime > 0.4) {
-        outputString += `<span data-m="${Math.round(word.start * 1000)}" data-d="400">，</span>`;
+      } else if (gap > commaSplit) {
+        outputString += '<span data-m="' + Math.round(word.start * 1000) + '" data-d="400">，</span>';
       }
-      outputString += `<span data-m="${Math.round(word.start * 1000)}" data-d="${Math.round((word.end - word.start) * 1000)}">${/^[a-zA-Z]+$/.test(word.word) ? word.word + ' ' : word.word}</span>`;
+      outputString += '<span data-m="' + Math.round(word.start * 1000) + '" data-d="' + Math.round((word.end - word.start) * 1000) + '">' + (/^[a-zA-Z]+$/.test(word.word) ? word.word + ' ' : word.word) + '</span>';
       lastEndTime = word.end;
     }
 

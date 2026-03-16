@@ -327,23 +327,46 @@
     <div id="right-panel">
       <div id="hypertranscript" class="hyperaudio-transcript"
         style="overflow-y:scroll; flex: auto; min-height: 10px; height:40vh; border-style:dashed; border-width: 1px; border-color:#999; padding: 8px">
-        <div id="searchForm" style="padding: 4px 8px; flex-shrink: 0; margin-bottom: 15px; border-bottom: 1px solid #ccc; line-height: 1.8;">
-          Playback Rate <span id="currentPbr">1</span><input id="pbr" type="range" value="1" min="0.5" max="5" step="0.05" style="width: 200px;">
-          <span style="border: 1px solid #ccc; padding: 5px; margin: 5px 0" id="fileUploader">
-            <label for="Uploader">Up</label>
-            <input id="Uploader" type="file" accept="video/*,audio/*,.json,.srt,.vtt,.mkv,.flv,.avi,.wmv,.mov,.webm,.ts,.m2ts" multiple>
-          </span>
-          <select id="videoRatio" onclick="changeRatio()">
-            <option value="unset">Change Video Ratio</option>
-            <option value="3:2">3:2</option>
-            <option value="4:3">4:3</option>
-            <option value="16:9">16:9</option>
-            <option value="1:1">1:1</option>
-            <option value="custom">Custom</option>
-            <option value="vertex">Select vertex to zoom</option>
-          </select>
-          <input type="text" id="customRatio" oninput="changeRatio()" style="display: none;" placeholder="Enter ratio (e.g., 4:3)">
-          <div id="guide" style="display: none;">Click on the top left vertex to zoom.</div>
+        <div id="searchForm" style="padding: 4px 8px; flex-shrink: 0; margin-bottom: 15px; border-bottom: 1px solid #ccc; line-height: 2;">
+          <div>
+            <span style="border: 1px solid #ccc; padding: 5px; margin: 5px 0" id="fileUploader">
+              <label for="Uploader">Upload</label>
+              <input id="Uploader" type="file" accept="video/*,audio/*,.json,.srt,.vtt,.mkv,.flv,.avi,.wmv,.mov,.webm,.ts,.m2ts" multiple>
+            </span>
+            <select id="videoRatio" onclick="changeRatio()">
+              <option value="unset">Change Video Ratio</option>
+              <option value="3:2">3:2</option>
+              <option value="4:3">4:3</option>
+              <option value="16:9">16:9</option>
+              <option value="1:1">1:1</option>
+              <option value="custom">Custom</option>
+              <option value="vertex">Select vertex to zoom</option>
+            </select>
+            <input type="text" id="customRatio" oninput="changeRatio()" style="display: none;" placeholder="Enter ratio (e.g., 4:3)">
+            <div id="guide" style="display: none;">Click on the top left vertex to zoom.</div>
+          </div>
+          <div>
+            Playback Rate <span id="currentPbr">1</span>
+            <input id="pbr" type="range" value="1" min="0.5" max="5" step="0.05" style="width: 200px;">
+          </div>
+          <div style="border-top: 1px solid #eee; padding-top: 4px;">
+            <div>
+              <label>SRT 段落分割间隔 <span id="currentSplitTime">2</span>s</label>
+              <input id="splitTimeSlider" type="range" value="2" min="0" max="10" step="0.1" style="width: 160px;">
+            </div>
+            <div>
+              <label>JSON 分割间隔 <span id="currentJsonSplit">0.25</span>s</label>
+              <input id="jsonSplitSlider" type="range" value="0.25" min="0" max="2" step="0.05" style="width: 160px;">
+            </div>
+            <div>
+              <label>字幕最大长度 <span id="currentMaxLen">37</span></label>
+              <input id="maxLenSlider" type="range" value="37" min="10" max="80" step="1" style="width: 160px;">
+            </div>
+            <div>
+              <label>字幕最小长度 <span id="currentMinLen">21</span></label>
+              <input id="minLenSlider" type="range" value="21" min="5" max="60" step="1" style="width: 160px;">
+            </div>
+          </div>
         </div>
         <article data-wm="$ilp.uphold.com/123article">
           <section data-media-src="https://lab.hyperaud.io/video/BBC/education.mp4" data-wm="$ilp.uphold.com/123section">
@@ -367,8 +390,57 @@
     let webMonetization = false;
     let playOnClick = true;
 
+    // Subtitle generation parameters (global, used by subtitle.js)
+    var paraSplitTime = 2;    // seconds – gap before inserting paragraph break
+    var paraPunct = false;    // require punctuation for paragraph break
+    var jsonSplitTime = 0.25; // seconds – gap threshold for JSON subtitle paragraph break
+    var captionMaxLen = 37;
+    var captionMinLen = 21;
+
+    // Store last loaded subtitle for reprocessing
+    var lastSubtitleContent = null;
+    var lastSubtitleType = null;
+
     let cap1 = caption();
-    cap1.init("hypertranscript", "hyperplayer", '37', '21');
+    cap1.init("hypertranscript", "hyperplayer", captionMaxLen, captionMinLen);
+
+    // Reprocess subtitles with current parameters
+    var reprocessTimer = null;
+    function reprocessSubtitles() {
+      if (!lastSubtitleContent || !lastSubtitleType) return;
+      clearTimeout(reprocessTimer);
+      reprocessTimer = setTimeout(function() {
+        switch (lastSubtitleType) {
+          case '.srt': processSRT(lastSubtitleContent); break;
+          case '.json': processJSON(lastSubtitleContent); break;
+          case '.vtt': processVTT(lastSubtitleContent); break;
+        }
+        cap1 = caption();
+        cap1.init("hypertranscript", "hyperplayer", captionMaxLen, captionMinLen);
+      }, 100);
+    }
+
+    // Slider bindings — instant reprocess on change
+    document.getElementById('splitTimeSlider').addEventListener('input', function() {
+      paraSplitTime = parseFloat(this.value);
+      document.getElementById('currentSplitTime').textContent = this.value;
+      reprocessSubtitles();
+    });
+    document.getElementById('jsonSplitSlider').addEventListener('input', function() {
+      jsonSplitTime = parseFloat(this.value);
+      document.getElementById('currentJsonSplit').textContent = this.value;
+      reprocessSubtitles();
+    });
+    document.getElementById('maxLenSlider').addEventListener('input', function() {
+      captionMaxLen = parseInt(this.value);
+      document.getElementById('currentMaxLen').textContent = this.value;
+      reprocessSubtitles();
+    });
+    document.getElementById('minLenSlider').addEventListener('input', function() {
+      captionMinLen = parseInt(this.value);
+      document.getElementById('currentMinLen').textContent = this.value;
+      reprocessSubtitles();
+    });
   </script>
 
   <!-- Layout Detection & Resizer & Zoom Subtitle -->
