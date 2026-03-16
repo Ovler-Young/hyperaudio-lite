@@ -1,0 +1,480 @@
+<!-- Desktop Split Layout - Based on test.html -->
+<!-- Version 2.1 -->
+
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>Hyperaudio - Desktop Split Layout</title>
+  <link rel="stylesheet" href="css/hyperaudio-lite-player.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/velocity/1.5.0/velocity.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"></script>
+  <script>
+    // Minimal jQuery shim for subtitle.js compatibility ($('#id').prop('checked'))
+    if (typeof $ === 'undefined') {
+      window.$ = function(selector) {
+        var el = document.querySelector(selector);
+        return {
+          prop: function(name) { return el ? el[name] : undefined; }
+        };
+      };
+    }
+  </script>
+  <style>
+    .hyperaudio-transcript .active {
+      background-color: #efefef;
+    }
+    .hyperaudio-transcript .active>.active {
+      background-color: #ccf;
+      text-decoration: #00f underline;
+      text-decoration-thickness: 3px;
+    }
+
+    /* === Split Layout CSS === */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    #split-container {
+      display: flex;
+      overflow: hidden;
+      flex: 1;
+      min-height: 0;
+    }
+    #split-container.landscape {
+      flex-direction: row;
+    }
+    #split-container.portrait {
+      flex-direction: column;
+    }
+
+    #left-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .landscape #left-panel {
+      flex: 2;
+      min-width: 200px;
+    }
+    .portrait #left-panel {
+      flex: none;
+    }
+
+    #left-panel #wrapper {
+      flex-shrink: 0;
+      overflow: hidden;
+      width: 100%;
+    }
+
+    #zoom-subtitle {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      font-size: 1.8em;
+      line-height: 1.4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      background: #f8f8f8;
+      border-top: 1px solid #ddd;
+      min-height: 0;
+    }
+    .portrait #zoom-subtitle {
+      display: none;
+    }
+    #zoom-subtitle .active {
+      background-color: #efefef;
+    }
+    #zoom-subtitle .active > .active {
+      background-color: #ccf;
+      text-decoration: #00f underline;
+      text-decoration-thickness: 3px;
+    }
+
+    #resizer {
+      flex-shrink: 0;
+      width: 6px;
+      cursor: col-resize;
+      background: #ccc;
+      transition: background 0.15s;
+    }
+    #resizer:hover, #resizer.dragging {
+      background: #888;
+    }
+    .portrait #resizer {
+      display: none;
+    }
+
+    #right-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .landscape #right-panel {
+      flex: 1;
+      min-width: 150px;
+    }
+    .portrait #right-panel {
+      flex: 1;
+    }
+
+    .landscape #hypertranscript {
+      flex: 1;
+      height: auto !important;
+      overflow-y: scroll;
+    }
+  </style>
+</head>
+
+<body>
+  <box style="height: 100vh; box-sizing: border-box; display: flex; flex-direction: column;" id="Thebox">
+  <div id="searchForm" style="padding: 4px 8px; flex-shrink: 0;">
+    Playback Rate <span id="currentPbr">1</span><input id="pbr" type="range" value="1" min="0.5" max="5" step="0.05" style="width: 200px;">
+    <span style="border: 1px solid #ccc; padding: 5px; margin: 5px 0" id="fileUploader">
+      <label for="Uploader">Up</label>
+      <input id="Uploader" type="file" accept="video/*,audio/*,.json,.srt,.vtt,.mkv,.flv,.avi,.wmv,.mov,.webm,.ts,.m2ts" multiple>
+    </span>
+    <select id="videoRatio" onclick="changeRatio()">
+      <option value="unset">Change Video Ratio</option>
+      <option value="3:2">3:2</option>
+      <option value="4:3">4:3</option>
+      <option value="16:9">16:9</option>
+      <option value="1:1">1:1</option>
+      <option value="custom">Custom</option>
+      <option value="vertex">Select vertex to zoom</option>
+    </select>
+    <input type="text" id="customRatio" oninput="changeRatio()" style="display: none;" placeholder="Enter ratio (e.g., 4:3)">
+    <div id="guide" style="display: none;">Click on the top left vertex to zoom.</div>
+  </div>
+
+  <script>
+    var debounceTimeout;
+    window.addEventListener('resize', function () {
+      clearTimeout(debounceTimeout);
+      debounceTimeout = setTimeout(function() {
+        changeRatio();
+        checkLayout();
+      }, 100);
+    });
+
+    function changeRatio() {
+      var x = document.getElementById("videoRatio").value;
+      var y = document.getElementById("customRatio");
+      var video = document.getElementById("hyperplayer");
+      if (x === "unset") {
+        let viewport = document.getElementById('viewport');
+        viewport.style.transform = 'none';
+        video.style.height = 'auto';
+        updateHeight();
+        video.removeEventListener('click', handleClick);
+        return;
+      }
+      if (x === 'vertex') {
+        video.addEventListener('click', handleClick);
+        var guide = document.getElementById('guide');
+        guide.style.display = 'block';
+      } else {
+        video.removeEventListener('click', handleClick);
+        clicks = [];
+        video.style.transform = 'none';
+      }
+      if (x === "custom") {
+        y.style.display = "block";
+      } else {
+        y.style.display = "none";
+        setVideoRatio(x, video);
+      }
+      if (y.value !== "" && x === "custom") {
+        setVideoRatio(y.value, video);
+      }
+    }
+
+    function setVideoRatio(ratio, video) {
+      var [width, height] = ratio.split(':');
+      var aspectRatio = height / width;
+      video.style.height = `${video.offsetWidth * aspectRatio}px`;
+      updateHeight();
+    }
+
+    // These are resolved lazily since the elements appear later in the DOM
+    let clicks = [];
+
+    function handleClick(e) {
+      let video = document.getElementById('hyperplayer');
+      let guide = document.getElementById('guide');
+      guide.textContent = 'Click on the top left vertex to zoom. Now start click.';
+      if (guide.style.display === 'none') {
+        guide.style.display = 'block';
+      }
+      let rect = video.getBoundingClientRect();
+      let x = e.clientX - rect.left;
+      let y = e.clientY - rect.top;
+      clicks.push({x, y});
+      if (clicks.length === 1) {
+        guide.textContent = `You clicked at (${x}, ${y}). Now click on the bottom right vertex.`;
+      } else if (clicks.length === 2) {
+        let widthZoom = video.offsetWidth / (clicks[1].x - clicks[0].x);
+        let heightZoom = video.offsetHeight / (clicks[1].y - clicks[0].y);
+        let zoom = Math.min(widthZoom, heightZoom);
+        let viewport = document.getElementById('viewport');
+        viewport.style.transform = `scale(${zoom}) translate(-${clicks[0].x}px, -${clicks[0].y}px)`;
+        guide.textContent = `You clicked at (${x}, ${y}). The video is now zoomed.`;
+        video.removeEventListener('click', handleClick);
+        clicks = [];
+        setTimeout(() => { guide.style.display = 'none'; }, 3000);
+      }
+    }
+  </script>
+
+  <script>
+    function getparams() {
+      var params = new URLSearchParams(window.location.search);
+      var videoUrl = params.get('video');
+      var subtitleUrl = params.get('subtitle');
+      if (subtitleUrl) {
+        fetch(subtitleUrl)
+          .then(response => response.text())
+          .then(content => {
+            var subtitleType = subtitleUrl.substr(subtitleUrl.lastIndexOf('.'));
+            switch (subtitleType) {
+              case '.vtt': processVTT(content); break;
+              case '.srt': processSRT(content); break;
+              case '.json': processJSON(content); break;
+              default: console.log('Unsupported subtitle format'); break;
+            }
+          })
+          .catch(error => console.error('Error fetching subtitle:', error));
+      }
+      if (videoUrl) {
+        var videoExt = videoUrl.substring(videoUrl.lastIndexOf('.')).split('?')[0].toLowerCase();
+        setTimeout(() => { processVideo(videoUrl, videoExt); }, 500);
+      }
+      if (videoUrl && subtitleUrl) {
+        document.getElementById('fileUploader').style.display = 'none';
+      }
+    };
+
+    document.addEventListener('DOMContentLoaded', getparams());
+
+    document.getElementById('Uploader').addEventListener('change', function (e) {
+      var files = Array.from(e.target.files).sort((a, b) => b.name.localeCompare(a.name));
+      var videoFile, subtitleFile;
+      var subtitleExts = ['.json', '.vtt', '.srt'];
+      var videoExts = ['.mp4', '.webm', '.ogg', '.ogv', '.mkv', '.flv', '.avi', '.wmv', '.mov', '.ts', '.m2ts', '.mp3', '.wav', '.m4a', '.aac', '.flac'];
+      files.forEach(file => {
+        var ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+        if (file.type.startsWith('video/') || file.type.startsWith('audio/') || videoExts.includes(ext)) {
+          videoFile = file;
+        } else if (['application/json', 'text/vtt', 'application/x-subrip'].includes(file.type) || subtitleExts.includes(ext)) {
+          subtitleFile = file;
+        }
+      });
+      if (videoFile) {
+        var ext = videoFile.name.substring(videoFile.name.lastIndexOf('.')).toLowerCase();
+        processVideo(URL.createObjectURL(videoFile), ext);
+      }
+      if (subtitleFile) {
+        processSubtitles(subtitleFile);
+      }
+    });
+
+    var mpegtsPlayer = null;
+
+    function processVideo(url, ext) {
+      var newSection = document.createElement('section');
+      newSection.setAttribute('data-media-src', url);
+      var articleElement = document.querySelector('article');
+      articleElement.insertBefore(newSection, articleElement.firstChild);
+      var videoElement = document.getElementById('hyperplayer');
+      if (mpegtsPlayer) {
+        mpegtsPlayer.destroy();
+        mpegtsPlayer = null;
+      }
+      var mpegtsExts = ['.flv', '.ts', '.m2ts'];
+      if (mpegtsExts.includes(ext) && typeof mpegts !== 'undefined' && mpegts.isSupported()) {
+        videoElement.removeAttribute('src');
+        mpegtsPlayer = mpegts.createPlayer({
+          type: ext === '.flv' ? 'flv' : 'mpegts',
+          url: url
+        });
+        mpegtsPlayer.attachMediaElement(videoElement);
+        mpegtsPlayer.load();
+      } else {
+        videoElement.setAttribute('src', url);
+        videoElement.load();
+      }
+    }
+
+    function insertSubtitles(content) {
+      var articleElement = document.querySelector('article');
+      var firstSection = articleElement.querySelector('section');
+      firstSection.innerHTML = content;
+      var sections = articleElement.querySelectorAll('section');
+      for (var i = 1; i < sections.length; i++) {
+        sections[i].remove();
+      }
+    }
+
+    function updateHeight() {
+      // In landscape mode, flexbox handles layout
+      if (window.innerWidth > window.innerHeight) return;
+      let boxHeight = window.getComputedStyle(document.getElementById('Thebox')).height;
+      let formHeight = window.getComputedStyle(document.getElementById('searchForm')).height;
+      let hyperplayerHeight = window.getComputedStyle(document.getElementById('hyperplayer')).height;
+      let hypertranscriptHeight = `${parseInt(boxHeight) - parseInt(formHeight) - parseInt(hyperplayerHeight) - 60}px`;
+      document.getElementById('hypertranscript').style.height = hypertranscriptHeight;
+    }
+  </script>
+
+  <!-- Split Layout Structure -->
+  <div id="split-container">
+    <div id="left-panel">
+      <div id="wrapper" style="overflow: hidden; width: 100%;">
+        <div id="viewport" style="width: 100%; height: 100%; transform-origin: top left;">
+          <video id="hyperplayer" class="hyperaudio-player" style="z-index: 5000000; object-fit: cover; position:sticky; width:100%;" controls>
+            <track id="hyperplayer-vtt" label="English" kind="subtitles" srclang="en" src="">
+          </video>
+        </div>
+      </div>
+      <div id="zoom-subtitle"></div>
+    </div>
+
+    <div id="resizer"></div>
+
+    <div id="right-panel">
+      <div id="hypertranscript" class="hyperaudio-transcript"
+        style="overflow-y:scroll; flex: auto; min-height: 10px; height:40vh; border-style:dashed; border-width: 1px; border-color:#999; padding: 8px">
+        <article data-wm="$ilp.uphold.com/123article">
+          <section data-media-src="https://lab.hyperaud.io/video/BBC/education.mp4" data-wm="$ilp.uphold.com/123section">
+          </section>
+        </article>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/hyperaudio-lite.js"></script>
+  <script src="js/hyperaudio-lite-extension.js"></script>
+  <script src="js/share-this.js"></script>
+  <script src="js/share-this-twitter.js"></script>
+  <script src="js/share-this-clipboard.js"></script>
+  <script src="js/caption.js"></script>
+  <script src="js/subtitle.js"></script>
+  <script>
+    let minimizedMode = false;
+    let autoScroll = true;
+    let doubleClick = true;
+    let webMonetization = false;
+    let playOnClick = true;
+
+    let cap1 = caption();
+    cap1.init("hypertranscript", "hyperplayer", '37', '21');
+  </script>
+
+  <!-- Layout Detection & Resizer & Zoom Subtitle -->
+  <script>
+    // === Layout Detection (JS px-based) ===
+    function checkLayout() {
+      var container = document.getElementById('split-container');
+      var leftPanel = document.getElementById('left-panel');
+      var rightPanel = document.getElementById('right-panel');
+      if (window.innerWidth > window.innerHeight) {
+        container.classList.add('landscape');
+        container.classList.remove('portrait');
+        // Clear inline height that updateHeight() may have set in portrait mode
+        document.getElementById('hypertranscript').style.height = '';
+      } else {
+        container.classList.add('portrait');
+        container.classList.remove('landscape');
+        leftPanel.style.flex = '';
+        leftPanel.style.width = '';
+        rightPanel.style.flex = '';
+        rightPanel.style.width = '';
+        updateHeight();
+      }
+    }
+    checkLayout();
+
+    // === Draggable Resizer ===
+    (function() {
+      var resizer = document.getElementById('resizer');
+      var leftPanel = document.getElementById('left-panel');
+      var rightPanel = document.getElementById('right-panel');
+      var container = document.getElementById('split-container');
+      var isResizing = false;
+
+      function onStart(e) {
+        if (!container.classList.contains('landscape')) return;
+        isResizing = true;
+        resizer.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+      }
+      function onMove(clientX) {
+        if (!isResizing) return;
+        var rect = container.getBoundingClientRect();
+        var offset = clientX - rect.left;
+        var total = rect.width;
+        var rw = resizer.offsetWidth;
+        var lw = Math.max(200, Math.min(offset, total - 150 - rw));
+        var rrw = total - lw - rw;
+        leftPanel.style.flex = 'none';
+        leftPanel.style.width = lw + 'px';
+        rightPanel.style.flex = 'none';
+        rightPanel.style.width = rrw + 'px';
+      }
+      function onEnd() {
+        if (!isResizing) return;
+        isResizing = false;
+        resizer.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+
+      resizer.addEventListener('mousedown', onStart);
+      document.addEventListener('mousemove', function(e) { onMove(e.clientX); });
+      document.addEventListener('mouseup', onEnd);
+      resizer.addEventListener('touchstart', function(e) { onStart(e); });
+      document.addEventListener('touchmove', function(e) {
+        if (isResizing && e.touches[0]) {
+          e.preventDefault();
+          onMove(e.touches[0].clientX);
+        }
+      }, { passive: false });
+      document.addEventListener('touchend', onEnd);
+    })();
+
+    // === Zoom Subtitle (MutationObserver) ===
+    (function() {
+      var transcript = document.getElementById('hypertranscript');
+      var zoomEl = document.getElementById('zoom-subtitle');
+      if (!transcript || !zoomEl) return;
+
+      var lastContent = '';
+      var observer = new MutationObserver(function() {
+        var activePara = transcript.querySelector('p.active, section.active, div.active');
+        if (activePara) {
+          var text = activePara.textContent;
+          if (text !== lastContent) {
+            lastContent = text;
+            // Clone the active paragraph content safely
+            while (zoomEl.firstChild) zoomEl.removeChild(zoomEl.firstChild);
+            var clone = activePara.cloneNode(true);
+            zoomEl.appendChild(clone);
+          }
+        }
+      });
+
+      observer.observe(transcript, {
+        attributes: true,
+        attributeFilter: ['class'],
+        subtree: true
+      });
+    })();
+  </script>
+
+  </box>
+</body>
+
+</html>
