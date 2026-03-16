@@ -138,146 +138,137 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
     return { node: paraInfo[paraInfo.length - 1].el, insertBefore: false };
   }
 
+  // Recursive divide-and-conquer: find all transitions within [tLow, tHigh]
+  async function findTransitions(tLow, tHigh, frameLow, frameHigh) {
+    var results = [];
+    if (tHigh - tLow <= MIN_BINARY_GAP) {
+      results.push(tHigh);
+      return results;
+    }
+    var tMid = (tLow + tHigh) / 2;
+    var frameMid = await seekAndCapture(tMid, cmpCtx, COMPARE_SIZE, COMPARE_SIZE);
+    var diffLowMid = computeDifference(frameLow, frameMid);
+    var diffMidHigh = computeDifference(frameMid, frameHigh);
+
+    if (diffLowMid > DIFF_THRESHOLD && diffMidHigh > DIFF_THRESHOLD) {
+      var left = await findTransitions(tLow, tMid, frameLow, frameMid);
+      var right = await findTransitions(tMid, tHigh, frameMid, frameHigh);
+      results = left.concat(right);
+    } else if (diffLowMid > DIFF_THRESHOLD) {
+      results = await findTransitions(tLow, tMid, frameLow, frameMid);
+    } else if (diffMidHigh > DIFF_THRESHOLD) {
+      results = await findTransitions(tMid, tHigh, frameMid, frameHigh);
+    }
+    return results;
+  }
+
+  // Insert a single slide's thumbnail into the transcript, returns the <img> element
+  function insertSlideIntoTranscript(sd) {
+    var insertPoint = findInsertionPoint(sd.timeMs);
+    if (!insertPoint) return null;
+
+    var img = document.createElement('img');
+    img.src = sd.dataUrl;
+    img.className = 'slide-thumbnail';
+    img.setAttribute('data-slide-time', String(sd.timeMs));
+    img.title = 'Slide @ ' + formatTimeForTitle(sd.timeMs / 1000);
+
+    if (insertPoint.insertBefore) {
+      insertPoint.node.parentNode.insertBefore(img, insertPoint.node);
+    } else if (insertPoint.node.nextSibling) {
+      insertPoint.node.parentNode.insertBefore(img, insertPoint.node.nextSibling);
+    } else {
+      insertPoint.node.parentNode.appendChild(img);
+    }
+    return img;
+  }
+
+  // Remove a previously inserted transcript thumbnail
+  function removeSlideFromTranscript(imgEl) {
+    if (imgEl && imgEl.parentNode) {
+      imgEl.parentNode.removeChild(imgEl);
+    }
+  }
+
   try {
-    // Phase 1: Coarse sampling
-    var interval = Math.min(COARSE_INTERVAL, duration / 4);
-    if (interval < 0.5) interval = duration; // very short video, just compare start vs end
-    var sampleTimes = [];
-    for (var t = 0; t < duration; t += interval) {
-      sampleTimes.push(t);
-    }
-    // Always include near-end
-    if (sampleTimes[sampleTimes.length - 1] < duration - 1) {
-      sampleTimes.push(duration - 0.5);
-    }
-
-    onStatus('Sampling 0/' + sampleTimes.length + '...');
-    var frames = [];
-    for (var si = 0; si < sampleTimes.length; si++) {
-      onStatus('Sampling ' + (si + 1) + '/' + sampleTimes.length + '...');
-      var imgData = await seekAndCapture(sampleTimes[si], cmpCtx, COMPARE_SIZE, COMPARE_SIZE);
-      frames.push({ time: sampleTimes[si], data: imgData });
-    }
-
-    // Phase 2: Find candidate intervals
-    var candidates = [];
-    for (var ci = 1; ci < frames.length; ci++) {
-      var diff = computeDifference(frames[ci - 1].data, frames[ci].data);
-      if (diff > DIFF_THRESHOLD) {
-        candidates.push({ tLow: frames[ci - 1].time, tHigh: frames[ci].time });
-      }
-    }
-
-    onStatus('Found ' + candidates.length + ' candidate interval(s), refining...');
-
-    // Phase 3: Recursive divide-and-conquer refinement
-    // For each candidate interval, find ALL transition points within it.
-    // If mid differs from both low and high, there are multiple transitions —
-    // recurse into both [low, mid] and [mid, high].
-    var transitions = [];
-
-    async function findTransitions(tLow, tHigh, frameLow, frameHigh) {
-      if (tHigh - tLow <= MIN_BINARY_GAP) {
-        transitions.push(tHigh);
-        return;
-      }
-      var tMid = (tLow + tHigh) / 2;
-      var frameMid = await seekAndCapture(tMid, cmpCtx, COMPARE_SIZE, COMPARE_SIZE);
-      var diffLowMid = computeDifference(frameLow, frameMid);
-      var diffMidHigh = computeDifference(frameMid, frameHigh);
-
-      if (diffLowMid > DIFF_THRESHOLD && diffMidHigh > DIFF_THRESHOLD) {
-        // Mid differs from both sides — transitions in both halves
-        await findTransitions(tLow, tMid, frameLow, frameMid);
-        await findTransitions(tMid, tHigh, frameMid, frameHigh);
-      } else if (diffLowMid > DIFF_THRESHOLD) {
-        // Transition only in [tLow, tMid]
-        await findTransitions(tLow, tMid, frameLow, frameMid);
-      } else if (diffMidHigh > DIFF_THRESHOLD) {
-        // Transition only in [tMid, tHigh]
-        await findTransitions(tMid, tHigh, frameMid, frameHigh);
-      }
-      // else: neither half differs — no transition (noise in coarse pass)
-    }
-
-    for (var bi = 0; bi < candidates.length; bi++) {
-      onStatus('Refining ' + (bi + 1) + '/' + candidates.length + '...');
-      var tLow = candidates[bi].tLow;
-      var tHigh = candidates[bi].tHigh;
-      var frameLow = await seekAndCapture(tLow, cmpCtx, COMPARE_SIZE, COMPARE_SIZE);
-      var frameHigh = await seekAndCapture(tHigh, cmpCtx, COMPARE_SIZE, COMPARE_SIZE);
-      await findTransitions(tLow, tHigh, frameLow, frameHigh);
-    }
-
-    // Phase 4: Deduplicate
-    transitions.sort(function (a, b) {
-      return a - b;
-    });
-    var deduped = [];
-    for (var di = 0; di < transitions.length; di++) {
-      if (deduped.length === 0 || transitions[di] - deduped[deduped.length - 1] > DEDUP_GAP) {
-        deduped.push(transitions[di]);
-      }
-    }
-    transitions = deduped;
-
-    if (transitions.length === 0) {
-      onStatus('No slide changes detected.');
-      videoEl.currentTime = savedTime;
-      if (!wasPaused) videoEl.play().catch(function () {});
-      return 0;
-    }
-
-    // Phase 5: Capture full-res thumbnails
-    // Remove any previously inserted thumbnails from transcript
+    // Remove any previously inserted thumbnails
     var oldThumbs = sectionEl.querySelectorAll('.slide-thumbnail');
     for (var ri = 0; ri < oldThumbs.length; ri++) {
       oldThumbs[ri].parentNode.removeChild(oldThumbs[ri]);
     }
 
-    onStatus('Capturing ' + transitions.length + ' thumbnail(s)...');
+    // Initialize filmstrip immediately so thumbs appear one by one
+    var filmstrip = initFilmstrip(videoEl);
+    var totalFound = 0;
 
-    // Capture all thumbnails in order (store data for both transcript and filmstrip)
-    var slideData = []; // { timeMs, dataUrl }
-    for (var ti = 0; ti < transitions.length; ti++) {
-      var slideTime = transitions[ti];
-      var captureTime = Math.min(slideTime + 0.5, duration - 0.1);
-      onStatus('Capturing thumbnail ' + (ti + 1) + '/' + transitions.length + '...');
+    // Process video in chunks: sample → refine → capture → insert, then next chunk
+    var chunkSize = Math.min(COARSE_INTERVAL, duration / 2);
+    if (chunkSize < 1) chunkSize = duration;
+    var totalChunks = Math.ceil(duration / chunkSize);
 
-      await seekAndCapture(captureTime, thumbCtx, thumbW, thumbH);
-      var dataUrl = thumbCanvas.toDataURL('image/jpeg', THUMB_QUALITY);
-      slideData.push({ timeMs: Math.round(slideTime * 1000), dataUrl: dataUrl });
-    }
+    // We need the frame at t=0 to start
+    var prevFrame = await seekAndCapture(0, cmpCtx, COMPARE_SIZE, COMPARE_SIZE);
+    var prevTime = 0;
+    var lastInsertedTime = -Infinity; // for dedup across chunks
+    var lastInsertedImgEl = null;    // DOM ref for removing short-lived slides
 
-    // Insert into transcript (reverse order so DOM positions remain stable)
-    for (var ti = slideData.length - 1; ti >= 0; ti--) {
-      var sd = slideData[ti];
-      var insertPoint = findInsertionPoint(sd.timeMs);
-      if (!insertPoint) continue;
+    for (var chunk = 0; chunk < totalChunks; chunk++) {
+      var chunkStart = chunk * chunkSize;
+      var chunkEnd = Math.min((chunk + 1) * chunkSize, duration - 0.1);
+      if (chunkEnd <= chunkStart) break;
 
-      var img = document.createElement('img');
-      img.src = sd.dataUrl;
-      img.className = 'slide-thumbnail';
-      img.setAttribute('data-slide-time', String(sd.timeMs));
-      img.title = 'Slide @ ' + formatTimeForTitle(sd.timeMs / 1000);
+      onStatus('Chunk ' + (chunk + 1) + '/' + totalChunks +
+               ' [' + formatTimeForTitle(chunkStart) + ' - ' + formatTimeForTitle(chunkEnd) + ']...');
 
-      if (insertPoint.insertBefore) {
-        insertPoint.node.parentNode.insertBefore(img, insertPoint.node);
-      } else if (insertPoint.node.nextSibling) {
-        insertPoint.node.parentNode.insertBefore(img, insertPoint.node.nextSibling);
-      } else {
-        insertPoint.node.parentNode.appendChild(img);
+      // Capture frame at chunk end
+      var endFrame = await seekAndCapture(chunkEnd, cmpCtx, COMPARE_SIZE, COMPARE_SIZE);
+
+      // Compare chunk start vs end
+      var chunkDiff = computeDifference(prevFrame, endFrame);
+      if (chunkDiff > DIFF_THRESHOLD) {
+        // There's at least one transition in this chunk — refine
+        var chunkTransitions = await findTransitions(chunkStart, chunkEnd, prevFrame, endFrame);
+
+        // Process transitions: drop slides that existed for < DEDUP_GAP seconds
+        for (var ct = 0; ct < chunkTransitions.length; ct++) {
+          var t = chunkTransitions[ct];
+
+          // If the previous slide only existed for < DEDUP_GAP seconds, it's noise — remove it
+          if (lastInsertedTime >= 0 && t - lastInsertedTime < DEDUP_GAP) {
+            // Remove the previous short-lived slide
+            if (lastInsertedImgEl) removeSlideFromTranscript(lastInsertedImgEl);
+            if (filmstrip) filmstrip.removeLastThumb();
+            totalFound--;
+          }
+
+          // Capture full-res thumbnail for this transition
+          var captureTime = Math.min(t + 0.5, duration - 0.1);
+          await seekAndCapture(captureTime, thumbCtx, thumbW, thumbH);
+          var dataUrl = thumbCanvas.toDataURL('image/jpeg', THUMB_QUALITY);
+          var sd = { timeMs: Math.round(t * 1000), dataUrl: dataUrl };
+
+          // Insert into transcript and filmstrip immediately
+          lastInsertedImgEl = insertSlideIntoTranscript(sd);
+          if (filmstrip) filmstrip.addThumb(sd);
+          totalFound++;
+          lastInsertedTime = t;
+        }
       }
+
+      // Carry forward: the end frame of this chunk is the start frame of the next
+      prevFrame = endFrame;
+      prevTime = chunkEnd;
     }
 
-    // Phase 6: Populate filmstrip in #zoom-subtitle
-    setupFilmstrip(videoEl, slideData);
+    if (totalFound === 0) {
+      onStatus('No slide changes detected.');
+    }
 
     // Restore video state
     videoEl.currentTime = savedTime;
     if (!wasPaused) videoEl.play().catch(function () {});
 
-    return transitions.length;
+    return totalFound;
   } catch (err) {
     // Restore video state on error
     videoEl.currentTime = savedTime;
@@ -293,16 +284,21 @@ function formatTimeForTitle(seconds) {
 }
 
 /**
- * Populate the filmstrip below the video with slide thumbnails.
- * Keeps the active slide at roughly the 2nd position from the left,
- * auto-scrolling as the video plays.
+ * Initialize the filmstrip below the video.
+ * Call once before detection starts, then use addFilmstripThumb() to add each slide.
  *
  * @param {HTMLVideoElement} videoEl
- * @param {Array<{timeMs: number, dataUrl: string}>} slideData - sorted by timeMs
+ * @returns {{ addThumb: function({timeMs, dataUrl}): void }} controller
  */
-function setupFilmstrip(videoEl, slideData) {
+function initFilmstrip(videoEl) {
   var zoomEl = document.getElementById('zoom-subtitle');
-  if (!zoomEl || slideData.length === 0) return;
+  if (!zoomEl) return null;
+
+  // Cleanup previous filmstrip if any
+  if (window._filmstripCleanup) {
+    window._filmstripCleanup();
+    window._filmstripCleanup = null;
+  }
 
   // Switch to filmstrip mode
   zoomEl.classList.add('filmstrip-mode');
@@ -310,26 +306,16 @@ function setupFilmstrip(videoEl, slideData) {
   // Preserve the playback rate overlay
   var pbrOverlay = document.getElementById('pbr-overlay');
 
-  // Clear existing content (zoom subtitle text) but keep overlay
+  // Clear existing content
   while (zoomEl.firstChild) zoomEl.removeChild(zoomEl.firstChild);
 
-  // Create thumbnail images
-  var thumbEls = [];
-  for (var i = 0; i < slideData.length; i++) {
-    var img = document.createElement('img');
-    img.src = slideData[i].dataUrl;
-    img.className = 'filmstrip-thumb';
-    img.setAttribute('data-slide-time', String(slideData[i].timeMs));
-    img.setAttribute('data-slide-index', String(i));
-    img.title = 'Slide ' + (i + 1) + ' @ ' + formatTimeForTitle(slideData[i].timeMs / 1000);
-    zoomEl.appendChild(img);
-    thumbEls.push(img);
-  }
-
-  // Re-append the playback rate overlay so it stays on top
+  // Re-append the overlay so it stays on top
   if (pbrOverlay) zoomEl.appendChild(pbrOverlay);
 
-  // Click handler for filmstrip thumbnails
+  var thumbEls = [];
+  var slideTimes = []; // parallel array of timeMs values
+
+  // Click handler
   zoomEl.addEventListener('click', function(e) {
     if (e.target.classList.contains('filmstrip-thumb')) {
       var timeMs = parseInt(e.target.getAttribute('data-slide-time'));
@@ -338,7 +324,7 @@ function setupFilmstrip(videoEl, slideData) {
     }
   });
 
-  // Convert vertical mouse wheel to horizontal scroll
+  // Vertical mouse wheel → horizontal scroll
   zoomEl.addEventListener('wheel', function(e) {
     if (e.deltaY !== 0) {
       e.preventDefault();
@@ -350,12 +336,12 @@ function setupFilmstrip(videoEl, slideData) {
   var lastActiveIndex = -1;
 
   function updateActiveSlide() {
+    if (thumbEls.length === 0) return;
     var currentMs = videoEl.currentTime * 1000;
 
-    // Find the active slide: last one whose timeMs <= currentMs
     var activeIndex = -1;
-    for (var i = 0; i < slideData.length; i++) {
-      if (slideData[i].timeMs <= currentMs) {
+    for (var i = 0; i < slideTimes.length; i++) {
+      if (slideTimes[i] <= currentMs) {
         activeIndex = i;
       } else {
         break;
@@ -365,7 +351,6 @@ function setupFilmstrip(videoEl, slideData) {
     if (activeIndex === lastActiveIndex) return;
     lastActiveIndex = activeIndex;
 
-    // Update active class
     for (var j = 0; j < thumbEls.length; j++) {
       if (j === activeIndex) {
         thumbEls[j].classList.add('active');
@@ -374,9 +359,7 @@ function setupFilmstrip(videoEl, slideData) {
       }
     }
 
-    // Auto-scroll: keep active at ~2nd position from left
     if (activeIndex >= 0) {
-      // Target: scroll so that one thumbnail is visible to the left of the active one
       var targetIndex = Math.max(0, activeIndex - 1);
       var targetEl = thumbEls[targetIndex];
       zoomEl.scrollTo({
@@ -388,14 +371,37 @@ function setupFilmstrip(videoEl, slideData) {
 
   videoEl.addEventListener('timeupdate', updateActiveSlide);
 
-  // Also update immediately
-  updateActiveSlide();
-
-  // Store cleanup function so it can be called if detection is re-run
-  if (window._filmstripCleanup) {
-    window._filmstripCleanup();
-  }
   window._filmstripCleanup = function() {
     videoEl.removeEventListener('timeupdate', updateActiveSlide);
+  };
+
+  // Return controller for adding thumbnails incrementally
+  return {
+    addThumb: function(sd) {
+      var idx = thumbEls.length;
+      var img = document.createElement('img');
+      img.src = sd.dataUrl;
+      img.className = 'filmstrip-thumb';
+      img.setAttribute('data-slide-time', String(sd.timeMs));
+      img.setAttribute('data-slide-index', String(idx));
+      img.title = 'Slide ' + (idx + 1) + ' @ ' + formatTimeForTitle(sd.timeMs / 1000);
+
+      // Insert before the overlay (which is the last child)
+      if (pbrOverlay && pbrOverlay.parentNode === zoomEl) {
+        zoomEl.insertBefore(img, pbrOverlay);
+      } else {
+        zoomEl.appendChild(img);
+      }
+
+      thumbEls.push(img);
+      slideTimes.push(sd.timeMs);
+    },
+    removeLastThumb: function() {
+      if (thumbEls.length === 0) return;
+      var img = thumbEls.pop();
+      slideTimes.pop();
+      if (img.parentNode) img.parentNode.removeChild(img);
+      lastActiveIndex = -1; // reset so next update recalculates
+    }
   };
 }
