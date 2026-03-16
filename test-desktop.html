@@ -312,11 +312,16 @@
   <!-- Split Layout Structure -->
   <div id="split-container">
     <div id="left-panel">
-      <div id="wrapper" style="overflow: hidden; width: 100%;">
+      <div id="wrapper" style="overflow: hidden; width: 100%; position: relative;">
         <div id="viewport" style="width: 100%; height: 100%; transform-origin: top left;">
           <video id="hyperplayer" class="hyperaudio-player" style="z-index: 5000000; object-fit: cover; position:sticky; width:100%;" controls>
             <track id="hyperplayer-vtt" label="English" kind="subtitles" srclang="en" src="">
           </video>
+        </div>
+        <div id="pbr-overlay" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.45); color: #fff; border-radius: 6px; padding: 4px 8px; font-size: 13px; display: flex; align-items: center; gap: 4px; z-index: 5000001; opacity: 0.6; transition: opacity 0.2s;"
+          onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.6'">
+          <span id="overlayPbrVal" style="min-width: 2em; text-align: center;">1</span>x
+          <input id="overlayPbr" type="range" value="1" min="0.5" max="5" step="0.05" style="width: 80px; cursor: pointer;">
         </div>
       </div>
       <div id="zoom-subtitle"></div>

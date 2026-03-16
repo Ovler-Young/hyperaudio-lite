@@ -66,11 +66,26 @@ let searchPhrase = function (phrase) {
 window.onload = function() {
 	const playbackRateCtrl = document.getElementById('pbr');
 	const currentPlaybackRate = document.getElementById('currentPbr');
+	const overlayPbr = document.getElementById('overlayPbr');
+	const overlayPbrVal = document.getElementById('overlayPbrVal');
+
+  function setPlaybackRate(val) {
+    hyperplayer.playbackRate = val;
+    if (currentPlaybackRate) currentPlaybackRate.textContent = val;
+    if (overlayPbrVal) overlayPbrVal.textContent = val;
+    if (playbackRateCtrl) playbackRateCtrl.value = val;
+    if (overlayPbr) overlayPbr.value = val;
+  }
 
   if (playbackRateCtrl !== null) {
     playbackRateCtrl.addEventListener('input', function(){
-      currentPlaybackRate.innerHTML = playbackRateCtrl.value;
-      hyperplayer.playbackRate = playbackRateCtrl.value;
+      setPlaybackRate(playbackRateCtrl.value);
+    },false);
+  }
+
+  if (overlayPbr !== null) {
+    overlayPbr.addEventListener('input', function(){
+      setPlaybackRate(overlayPbr.value);
     },false);
   }
 }
