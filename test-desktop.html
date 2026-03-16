@@ -423,8 +423,26 @@
             </div>
           </div>
           <div style="border-top: 1px solid #eee; padding-top: 4px;">
-            <button id="detectSlidesBtn" type="button">Detect Slides</button>
-            <span id="slideDetectStatus" style="margin-left: 8px; font-size: 12px; color: #666;"></span>
+            <div style="margin-bottom: 4px;">
+              <button id="detectSlidesBtn" type="button">Detect Slides</button>
+              <span id="slideDetectStatus" style="margin-left: 8px; font-size: 12px; color: #666;"></span>
+            </div>
+            <div>
+              <label>采样间隔 <input id="sdIntervalNum" type="number" value="30" min="1" max="300" step="1" style="width: 50px;">s</label>
+              <input id="sdIntervalSlider" type="range" value="30" min="1" max="300" step="1" style="width: 120px;">
+            </div>
+            <div>
+              <label>变化阈值 <input id="sdThresholdNum" type="number" value="5" min="1" max="100" step="1" style="width: 50px;"></label>
+              <input id="sdThresholdSlider" type="range" value="5" min="1" max="100" step="1" style="width: 120px;">
+            </div>
+            <div>
+              <label>比对尺寸 <input id="sdSizeNum" type="number" value="128" min="16" max="512" step="16" style="width: 50px;">px</label>
+              <input id="sdSizeSlider" type="range" value="128" min="16" max="512" step="16" style="width: 120px;">
+            </div>
+            <div>
+              <label>最短持续 <input id="sdDedupNum" type="number" value="2" min="0" max="30" step="0.5" style="width: 50px;">s</label>
+              <input id="sdDedupSlider" type="range" value="2" min="0" max="30" step="0.5" style="width: 120px;">
+            </div>
           </div>
         </div>
         <article data-wm="$ilp.uphold.com/123article">
