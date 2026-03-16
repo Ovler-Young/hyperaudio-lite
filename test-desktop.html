@@ -129,24 +129,6 @@
 
 <body>
   <box style="height: 100vh; box-sizing: border-box; display: flex; flex-direction: column;" id="Thebox">
-  <div id="searchForm" style="padding: 4px 8px; flex-shrink: 0;">
-    Playback Rate <span id="currentPbr">1</span><input id="pbr" type="range" value="1" min="0.5" max="5" step="0.05" style="width: 200px;">
-    <span style="border: 1px solid #ccc; padding: 5px; margin: 5px 0" id="fileUploader">
-      <label for="Uploader">Up</label>
-      <input id="Uploader" type="file" accept="video/*,audio/*,.json,.srt,.vtt,.mkv,.flv,.avi,.wmv,.mov,.webm,.ts,.m2ts" multiple>
-    </span>
-    <select id="videoRatio" onclick="changeRatio()">
-      <option value="unset">Change Video Ratio</option>
-      <option value="3:2">3:2</option>
-      <option value="4:3">4:3</option>
-      <option value="16:9">16:9</option>
-      <option value="1:1">1:1</option>
-      <option value="custom">Custom</option>
-      <option value="vertex">Select vertex to zoom</option>
-    </select>
-    <input type="text" id="customRatio" oninput="changeRatio()" style="display: none;" placeholder="Enter ratio (e.g., 4:3)">
-    <div id="guide" style="display: none;">Click on the top left vertex to zoom.</div>
-  </div>
 
   <script>
     var debounceTimeout;
@@ -255,28 +237,29 @@
       }
     };
 
-    document.addEventListener('DOMContentLoaded', getparams());
-
-    document.getElementById('Uploader').addEventListener('change', function (e) {
-      var files = Array.from(e.target.files).sort((a, b) => b.name.localeCompare(a.name));
-      var videoFile, subtitleFile;
-      var subtitleExts = ['.json', '.vtt', '.srt'];
-      var videoExts = ['.mp4', '.webm', '.ogg', '.ogv', '.mkv', '.flv', '.avi', '.wmv', '.mov', '.ts', '.m2ts', '.mp3', '.wav', '.m4a', '.aac', '.flac'];
-      files.forEach(file => {
-        var ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-        if (file.type.startsWith('video/') || file.type.startsWith('audio/') || videoExts.includes(ext)) {
-          videoFile = file;
-        } else if (['application/json', 'text/vtt', 'application/x-subrip'].includes(file.type) || subtitleExts.includes(ext)) {
-          subtitleFile = file;
+    document.addEventListener('DOMContentLoaded', function() {
+      getparams();
+      document.getElementById('Uploader').addEventListener('change', function (e) {
+        var files = Array.from(e.target.files).sort((a, b) => b.name.localeCompare(a.name));
+        var videoFile, subtitleFile;
+        var subtitleExts = ['.json', '.vtt', '.srt'];
+        var videoExts = ['.mp4', '.webm', '.ogg', '.ogv', '.mkv', '.flv', '.avi', '.wmv', '.mov', '.ts', '.m2ts', '.mp3', '.wav', '.m4a', '.aac', '.flac'];
+        files.forEach(file => {
+          var ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+          if (file.type.startsWith('video/') || file.type.startsWith('audio/') || videoExts.includes(ext)) {
+            videoFile = file;
+          } else if (['application/json', 'text/vtt', 'application/x-subrip'].includes(file.type) || subtitleExts.includes(ext)) {
+            subtitleFile = file;
+          }
+        });
+        if (videoFile) {
+          var ext = videoFile.name.substring(videoFile.name.lastIndexOf('.')).toLowerCase();
+          processVideo(URL.createObjectURL(videoFile), ext);
+        }
+        if (subtitleFile) {
+          processSubtitles(subtitleFile);
         }
       });
-      if (videoFile) {
-        var ext = videoFile.name.substring(videoFile.name.lastIndexOf('.')).toLowerCase();
-        processVideo(URL.createObjectURL(videoFile), ext);
-      }
-      if (subtitleFile) {
-        processSubtitles(subtitleFile);
-      }
     });
 
     var mpegtsPlayer = null;
@@ -320,9 +303,8 @@
       // In landscape mode, flexbox handles layout
       if (window.innerWidth > window.innerHeight) return;
       let boxHeight = window.getComputedStyle(document.getElementById('Thebox')).height;
-      let formHeight = window.getComputedStyle(document.getElementById('searchForm')).height;
       let hyperplayerHeight = window.getComputedStyle(document.getElementById('hyperplayer')).height;
-      let hypertranscriptHeight = `${parseInt(boxHeight) - parseInt(formHeight) - parseInt(hyperplayerHeight) - 60}px`;
+      let hypertranscriptHeight = `${parseInt(boxHeight) - parseInt(hyperplayerHeight) - 40}px`;
       document.getElementById('hypertranscript').style.height = hypertranscriptHeight;
     }
   </script>
@@ -345,6 +327,24 @@
     <div id="right-panel">
       <div id="hypertranscript" class="hyperaudio-transcript"
         style="overflow-y:scroll; flex: auto; min-height: 10px; height:40vh; border-style:dashed; border-width: 1px; border-color:#999; padding: 8px">
+        <div id="searchForm" style="padding: 4px 8px; flex-shrink: 0; margin-bottom: 15px; border-bottom: 1px solid #ccc; line-height: 1.8;">
+          Playback Rate <span id="currentPbr">1</span><input id="pbr" type="range" value="1" min="0.5" max="5" step="0.05" style="width: 200px;">
+          <span style="border: 1px solid #ccc; padding: 5px; margin: 5px 0" id="fileUploader">
+            <label for="Uploader">Up</label>
+            <input id="Uploader" type="file" accept="video/*,audio/*,.json,.srt,.vtt,.mkv,.flv,.avi,.wmv,.mov,.webm,.ts,.m2ts" multiple>
+          </span>
+          <select id="videoRatio" onclick="changeRatio()">
+            <option value="unset">Change Video Ratio</option>
+            <option value="3:2">3:2</option>
+            <option value="4:3">4:3</option>
+            <option value="16:9">16:9</option>
+            <option value="1:1">1:1</option>
+            <option value="custom">Custom</option>
+            <option value="vertex">Select vertex to zoom</option>
+          </select>
+          <input type="text" id="customRatio" oninput="changeRatio()" style="display: none;" placeholder="Enter ratio (e.g., 4:3)">
+          <div id="guide" style="display: none;">Click on the top left vertex to zoom.</div>
+        </div>
         <article data-wm="$ilp.uphold.com/123article">
           <section data-media-src="https://lab.hyperaud.io/video/BBC/education.mp4" data-wm="$ilp.uphold.com/123section">
           </section>
