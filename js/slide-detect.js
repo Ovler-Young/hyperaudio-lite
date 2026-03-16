@@ -81,22 +81,61 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
     return totalDiff / count;
   }
 
-  // Returns { node, insertBefore } where insertBefore indicates the img should go before the node
+  // Returns { node, insertBefore } where insertBefore indicates the img should go before the node.
+  // If the transition falls mid-paragraph, check whether most of that paragraph is before or after
+  // the transition. If most is after → insert before that paragraph (the slide changed, then most
+  // of the text belongs to the new slide).
   function findInsertionPoint(timeMs) {
     var paragraphs = sectionEl.querySelectorAll('p');
     if (paragraphs.length === 0) return null;
-    var target = null;
+
+    // Build array of { el, startMs, endMs } for each paragraph
+    var paraInfo = [];
     for (var i = 0; i < paragraphs.length; i++) {
-      var firstSpan = paragraphs[i].querySelector('span[data-m]');
-      if (firstSpan && parseInt(firstSpan.getAttribute('data-m')) <= timeMs) {
-        target = paragraphs[i];
+      var spans = paragraphs[i].querySelectorAll('span[data-m]');
+      if (spans.length === 0) continue;
+      var startMs = parseInt(spans[0].getAttribute('data-m'));
+      var lastSpan = spans[spans.length - 1];
+      var endMs = parseInt(lastSpan.getAttribute('data-m')) + (parseInt(lastSpan.getAttribute('data-d')) || 0);
+      paraInfo.push({ el: paragraphs[i], startMs: startMs, endMs: endMs });
+    }
+    if (paraInfo.length === 0) return null;
+
+    // If transition is before all paragraphs
+    if (timeMs < paraInfo[0].startMs) {
+      return { node: paraInfo[0].el, insertBefore: true };
+    }
+
+    // Find which paragraph the transition falls in (or between)
+    for (var j = 0; j < paraInfo.length; j++) {
+      var p = paraInfo[j];
+      var nextStart = (j + 1 < paraInfo.length) ? paraInfo[j + 1].startMs : Infinity;
+
+      if (timeMs >= p.startMs && timeMs < nextStart) {
+        // Transition is during or after this paragraph
+        var paraDuration = p.endMs - p.startMs;
+        var timeIntoPara = timeMs - p.startMs;
+
+        if (paraDuration > 0 && timeIntoPara < paraDuration / 2) {
+          // Transition is in the first half → most content is after transition
+          // → this paragraph belongs to the NEW slide → insert thumbnail BEFORE it
+          return { node: p.el, insertBefore: true };
+        } else if (paraDuration > 0 && timeIntoPara >= paraDuration / 2) {
+          // Transition is in the second half → most content is before transition
+          // → this paragraph belongs to the OLD slide → insert thumbnail after it
+          if (j + 1 < paraInfo.length) {
+            return { node: paraInfo[j + 1].el, insertBefore: true };
+          }
+          return { node: p.el, insertBefore: false };
+        } else {
+          // Zero-duration paragraph or transition between paragraphs → insert after
+          return { node: p.el, insertBefore: false };
+        }
       }
     }
-    // If timeMs is before all paragraphs, insert before the first one
-    if (target === null) {
-      return { node: paragraphs[0], insertBefore: true };
-    }
-    return { node: target, insertBefore: false };
+
+    // Transition is after all paragraphs
+    return { node: paraInfo[paraInfo.length - 1].el, insertBefore: false };
   }
 
   try {
