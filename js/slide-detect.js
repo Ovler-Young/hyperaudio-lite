@@ -109,7 +109,7 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
     // Find which paragraph the transition falls in (or between)
     for (var j = 0; j < paraInfo.length; j++) {
       var p = paraInfo[j];
-      var nextStart = (j + 1 < paraInfo.length) ? paraInfo[j + 1].startMs : Infinity;
+      var nextStart = j + 1 < paraInfo.length ? paraInfo[j + 1].startMs : Infinity;
 
       if (timeMs >= p.startMs && timeMs < nextStart) {
         // Transition is during or after this paragraph
@@ -158,6 +158,12 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
       results = await findTransitions(tLow, tMid, frameLow, frameMid);
     } else if (diffMidHigh > DIFF_THRESHOLD) {
       results = await findTransitions(tMid, tHigh, frameMid, frameHigh);
+    } else {
+      if (diffLowMid > diffMidHigh) {
+        results = await findTransitions(tLow, tMid, frameLow, frameMid);
+      } else {
+        results = await findTransitions(tMid, tHigh, frameMid, frameHigh);
+      }
     }
     return results;
   }
@@ -183,13 +189,6 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
     return img;
   }
 
-  // Remove a previously inserted transcript thumbnail
-  function removeSlideFromTranscript(imgEl) {
-    if (imgEl && imgEl.parentNode) {
-      imgEl.parentNode.removeChild(imgEl);
-    }
-  }
-
   try {
     // Remove any previously inserted thumbnails
     var oldThumbs = sectionEl.querySelectorAll('.slide-thumbnail');
@@ -209,16 +208,24 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
     // We need the frame at t=0 to start
     var prevFrame = await seekAndCapture(0, cmpCtx, COMPARE_SIZE, COMPARE_SIZE);
     var prevTime = 0;
-    var lastInsertedTime = -Infinity; // for dedup across chunks
-    var lastInsertedImgEl = null;    // DOM ref for removing short-lived slides
+    var lastTransitionTime = 0;
 
     for (var chunk = 0; chunk < totalChunks; chunk++) {
       var chunkStart = chunk * chunkSize;
       var chunkEnd = Math.min((chunk + 1) * chunkSize, duration - 0.1);
       if (chunkEnd <= chunkStart) break;
 
-      onStatus('Chunk ' + (chunk + 1) + '/' + totalChunks +
-               ' [' + formatTimeForTitle(chunkStart) + ' - ' + formatTimeForTitle(chunkEnd) + ']...');
+      onStatus(
+        'Chunk ' +
+          (chunk + 1) +
+          '/' +
+          totalChunks +
+          ' [' +
+          formatTimeForTitle(chunkStart) +
+          ' - ' +
+          formatTimeForTitle(chunkEnd) +
+          ']...',
+      );
 
       // Capture frame at chunk end
       var endFrame = await seekAndCapture(chunkEnd, cmpCtx, COMPARE_SIZE, COMPARE_SIZE);
@@ -229,35 +236,44 @@ async function detectSlideChanges(videoEl, sectionEl, onStatus) {
         // There's at least one transition in this chunk — refine
         var chunkTransitions = await findTransitions(chunkStart, chunkEnd, prevFrame, endFrame);
 
-        // Process transitions: drop slides that existed for < DEDUP_GAP seconds
+        // Process transitions:
         for (var ct = 0; ct < chunkTransitions.length; ct++) {
           var t = chunkTransitions[ct];
 
-          // If the previous slide only existed for < DEDUP_GAP seconds, it's noise — remove it
-          if (lastInsertedTime >= 0 && t - lastInsertedTime < DEDUP_GAP) {
-            // Remove the previous short-lived slide
-            if (lastInsertedImgEl) removeSlideFromTranscript(lastInsertedImgEl);
-            if (filmstrip) filmstrip.removeLastThumb();
-            totalFound--;
+          if (t - lastTransitionTime < DEDUP_GAP) {
+            continue;
           }
 
-          // Capture full-res thumbnail for this transition
-          var captureTime = Math.min(t + 0.5, duration - 0.1);
+          // Capture the final form of the *previous* slide just before this new transition
+          var captureTime = Math.max(0, t - 2);
           await seekAndCapture(captureTime, thumbCtx, thumbW, thumbH);
           var dataUrl = thumbCanvas.toDataURL('image/jpeg', THUMB_QUALITY);
-          var sd = { timeMs: Math.round(t * 1000), dataUrl: dataUrl };
 
-          // Insert into transcript and filmstrip immediately
-          lastInsertedImgEl = insertSlideIntoTranscript(sd);
+          var sd = { timeMs: Math.round(lastTransitionTime * 1000), dataUrl: dataUrl };
+
+          insertSlideIntoTranscript(sd);
           if (filmstrip) filmstrip.addThumb(sd);
           totalFound++;
-          lastInsertedTime = t;
+
+          // This transition starts the next phase
+          lastTransitionTime = t;
         }
       }
 
-      // Carry forward: the end frame of this chunk is the start frame of the next
+      // Carry forward
       prevFrame = endFrame;
       prevTime = chunkEnd;
+    }
+
+    // Capture the final state of the very last slide
+    if (duration - lastTransitionTime >= DEDUP_GAP || totalFound === 0) {
+      var finalCaptureTime = Math.max(0, duration - 0.5);
+      await seekAndCapture(finalCaptureTime, thumbCtx, thumbW, thumbH);
+      var finalDataUrl = thumbCanvas.toDataURL('image/jpeg', THUMB_QUALITY);
+      var finalSd = { timeMs: Math.round(lastTransitionTime * 1000), dataUrl: finalDataUrl };
+      insertSlideIntoTranscript(finalSd);
+      if (filmstrip) filmstrip.addThumb(finalSd);
+      totalFound++;
     }
 
     if (totalFound === 0) {
@@ -316,21 +332,25 @@ function initFilmstrip(videoEl) {
   var slideTimes = []; // parallel array of timeMs values
 
   // Click handler
-  zoomEl.addEventListener('click', function(e) {
+  zoomEl.addEventListener('click', function (e) {
     if (e.target.classList.contains('filmstrip-thumb')) {
       var timeMs = parseInt(e.target.getAttribute('data-slide-time'));
       videoEl.currentTime = timeMs / 1000;
-      videoEl.play().catch(function() {});
+      videoEl.play().catch(function () {});
     }
   });
 
   // Vertical mouse wheel → horizontal scroll
-  zoomEl.addEventListener('wheel', function(e) {
-    if (e.deltaY !== 0) {
-      e.preventDefault();
-      zoomEl.scrollLeft += e.deltaY;
-    }
-  }, { passive: false });
+  zoomEl.addEventListener(
+    'wheel',
+    function (e) {
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        zoomEl.scrollLeft += e.deltaY;
+      }
+    },
+    { passive: false },
+  );
 
   // Track active slide and auto-scroll
   var lastActiveIndex = -1;
@@ -364,20 +384,20 @@ function initFilmstrip(videoEl) {
       var targetEl = thumbEls[targetIndex];
       zoomEl.scrollTo({
         left: targetEl.offsetLeft - zoomEl.offsetLeft,
-        behavior: 'smooth'
+        behavior: 'smooth',
       });
     }
   }
 
   videoEl.addEventListener('timeupdate', updateActiveSlide);
 
-  window._filmstripCleanup = function() {
+  window._filmstripCleanup = function () {
     videoEl.removeEventListener('timeupdate', updateActiveSlide);
   };
 
   // Return controller for adding thumbnails incrementally
   return {
-    addThumb: function(sd) {
+    addThumb: function (sd) {
       var idx = thumbEls.length;
       var img = document.createElement('img');
       img.src = sd.dataUrl;
@@ -396,12 +416,12 @@ function initFilmstrip(videoEl) {
       thumbEls.push(img);
       slideTimes.push(sd.timeMs);
     },
-    removeLastThumb: function() {
+    removeLastThumb: function () {
       if (thumbEls.length === 0) return;
       var img = thumbEls.pop();
       slideTimes.pop();
       if (img.parentNode) img.parentNode.removeChild(img);
       lastActiveIndex = -1; // reset so next update recalculates
-    }
+    },
   };
 }
