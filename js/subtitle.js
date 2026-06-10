@@ -8,7 +8,6 @@ function processSubtitles(file) {
       var subtitleType = fileName.substr(fileName.lastIndexOf('.'));
       switch (subtitleType) {
         case '.vtt':
-          console.log('Unsupported subtitle format');
           processVTT(content);
           break;
         case '.srt':
@@ -30,7 +29,141 @@ function processSubtitles(file) {
   }
 
   function processVTT(content) {
-    // process VTT subtitle file
+    if (typeof lastSubtitleContent !== 'undefined') {
+      lastSubtitleContent = content;
+      lastSubtitleType = '.vtt';
+    }
+
+    var toSeconds = function(t_in) {
+      if (!t_in) return 0;
+
+      var timestamp = t_in.trim().split(/\s+/)[0].replace(',', '.');
+      var parts = timestamp.split(':');
+      var hours = 0;
+      var minutes = 0;
+      var secondsPart;
+
+      if (parts.length === 3) {
+        hours = parseFloat(parts[0], 10);
+        minutes = parseFloat(parts[1], 10);
+        secondsPart = parts[2];
+      } else if (parts.length === 2) {
+        minutes = parseFloat(parts[0], 10);
+        secondsPart = parts[1];
+      } else {
+        return 0;
+      }
+
+      var seconds = parseFloat(secondsPart, 10);
+      if (isNaN(hours) || isNaN(minutes) || isNaN(seconds)) return 0;
+
+      return hours * 3600 + minutes * 60 + seconds;
+    };
+
+    var escapeHtml = function(text) {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    };
+
+    var cleanText = function(text) {
+      return text
+        .replace(/<v(?:\.[^>\s]+)?(?:\s+[^>]*)?>/gi, '')
+        .replace(/<\/v>/gi, '')
+        .replace(/<c(?:\.[^>\s]+)*>/gi, '')
+        .replace(/<\/c>/gi, '')
+        .replace(/<lang\s+[^>]+>/gi, '')
+        .replace(/<\/lang>/gi, '')
+        .replace(/<ruby>/gi, '')
+        .replace(/<\/ruby>/gi, '')
+        .replace(/<rt>/gi, '')
+        .replace(/<\/rt>/gi, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+
+    var cues = [];
+    var blocks = content
+      .replace(/^\uFEFF/, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .split(/\n{2,}/);
+
+    for (var bi = 0; bi < blocks.length; bi++) {
+      var blockLines = blocks[bi].split('\n').map(function(line) { return line.trim(); });
+      var timeLineIndex = -1;
+
+      for (var li = 0; li < blockLines.length; li++) {
+        if (blockLines[li].indexOf('-->') !== -1) {
+          timeLineIndex = li;
+          break;
+        }
+      }
+
+      if (timeLineIndex === -1) continue;
+
+      var time = blockLines[timeLineIndex].split(/[\t ]*-->[\t ]*/);
+      if (!time[0] || !time[1]) continue;
+
+      var text = cleanText(blockLines.slice(timeLineIndex + 1).join(' '));
+      if (!text) continue;
+
+      cues.push({
+        start: toSeconds(time[0]),
+        end: toSeconds(time[1]),
+        text: text
+      });
+    }
+
+    cues.sort(function(a, b) {
+      return a.start - b.start || a.end - b.end;
+    });
+
+    var outputString = '<p>';
+    var ltime = 0;
+    var ltext;
+    var splitTime = typeof paraSplitTime !== 'undefined' ? paraSplitTime : 2;
+    var pPunct = typeof paraPunct !== 'undefined' ? paraPunct : false;
+
+    for (var ci = 0; ci < cues.length; ci++) {
+      var sub = cues[ci];
+      var words = sub.text.split(' ').filter(function(word) { return word.length > 0; });
+      var duration = sub.end - sub.start;
+      if (duration <= 0) duration = 0.1;
+
+      var totalLetters = 0;
+      for (var wi = 0; wi < words.length; wi++) {
+        totalLetters += words[wi].length;
+      }
+
+      var fallbackStep = duration / (words.length || 1);
+      var letterTime = totalLetters > 0 ? duration / totalLetters : fallbackStep;
+      var wordStart = 0;
+
+      for (var wj = 0; wj < words.length; wj++) {
+        var stime = Math.round((sub.start + wordStart) * 1000);
+        var stext = words[wj];
+
+        if (stime - ltime > splitTime * 1000 && splitTime > 0 && outputString !== '<p>') {
+          var punctPresent = ltext && (ltext.indexOf('.') > 0 || ltext.indexOf('?') > 0 || ltext.indexOf('!') > 0 || ltext.indexOf('。') > 0 || ltext.indexOf('？') > 0 || ltext.indexOf('！') > 0);
+          if (!pPunct || (pPunct && punctPresent)) {
+            outputString += '</p><p>';
+          }
+        }
+
+        outputString += '<span data-m="' + stime + '">' + escapeHtml(stext) + ' </span>\n';
+
+        ltime = stime;
+        ltext = stext;
+        wordStart += totalLetters > 0 ? words[wj].length * letterTime : fallbackStep;
+      }
+    }
+
+    outputString += '</p>';
+    insertSubtitles(outputString);
+    new HyperaudioLite("hypertranscript", "hyperplayer", minimizedMode, autoScroll, doubleClick, webMonetization, playOnClick);
   }
 
   function processSRT(content) {
