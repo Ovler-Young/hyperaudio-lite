@@ -67,6 +67,11 @@ function processSubtitles(file) {
         .replace(/>/g, '&gt;');
     };
 
+    var extractSpeaker = function(text) {
+      var match = text.match(/<v(?:\.[^>\s]+)?(?:\s+([^>]*?))?>/i);
+      return match && match[1] ? match[1].trim() : '';
+    };
+
     var cleanText = function(text) {
       return text
         .replace(/<v(?:\.[^>\s]+)?(?:\s+[^>]*)?>/gi, '')
@@ -107,12 +112,14 @@ function processSubtitles(file) {
       var time = blockLines[timeLineIndex].split(/[\t ]*-->[\t ]*/);
       if (!time[0] || !time[1]) continue;
 
-      var text = cleanText(blockLines.slice(timeLineIndex + 1).join(' '));
+      var rawText = blockLines.slice(timeLineIndex + 1).join(' ');
+      var text = cleanText(rawText);
       if (!text) continue;
 
       cues.push({
         start: toSeconds(time[0]),
         end: toSeconds(time[1]),
+        speaker: extractSpeaker(rawText),
         text: text
       });
     }
@@ -124,11 +131,21 @@ function processSubtitles(file) {
     var outputString = '<p>';
     var ltime = 0;
     var ltext;
+    var lastSpeaker = null;
     var splitTime = typeof paraSplitTime !== 'undefined' ? paraSplitTime : 2;
     var pPunct = typeof paraPunct !== 'undefined' ? paraPunct : false;
 
     for (var ci = 0; ci < cues.length; ci++) {
       var sub = cues[ci];
+      var speakerChanged = sub.speaker && sub.speaker !== lastSpeaker;
+      if (speakerChanged) {
+        if (outputString !== '<p>') {
+          outputString += '</p><p>';
+        }
+        outputString += '<span class="speaker">' + escapeHtml(sub.speaker) + '</span>\n';
+        lastSpeaker = sub.speaker;
+      }
+
       var words = sub.text.split(' ').filter(function(word) { return word.length > 0; });
       var duration = sub.end - sub.start;
       if (duration <= 0) duration = 0.1;
