@@ -9,12 +9,13 @@
  * @param {function(string):void} onStatus - Status callback
  * @returns {Promise<number>} Number of slide changes detected
  */
-async function detectSlideChanges(videoEl, sectionEl, onStatus) {
-  var COMPARE_SIZE = 128;
-  var COARSE_INTERVAL = 60;
-  var DIFF_THRESHOLD = 5;
+async function detectSlideChanges(videoEl, sectionEl, onStatus, options) {
+  var opts = options || {};
+  var COMPARE_SIZE = opts.compareSize || 128;
+  var COARSE_INTERVAL = opts.coarseInterval || 30;
+  var DIFF_THRESHOLD = opts.diffThreshold || 5;
   var MIN_BINARY_GAP = 0.5;
-  var DEDUP_GAP = 2;
+  var DEDUP_GAP = opts.dedupGap != null ? opts.dedupGap : 2;
   var THUMB_QUALITY = 0.7;
 
   var duration = videoEl.duration;

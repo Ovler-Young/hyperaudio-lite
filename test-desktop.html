@@ -309,6 +309,26 @@
         if (subtitleFile) {
           processSubtitles(subtitleFile);
         }
+        // Auto-trigger slide detection after upload when both video and subtitles are ready
+        if (videoFile && subtitleFile) {
+          var video = document.getElementById('hyperplayer');
+          function tryAutoDetect() {
+            var section = document.querySelector('#hypertranscript article section');
+            if (video.duration && section && section.querySelector('span[data-m]')) {
+              if (typeof runSlideDetection === 'function') {
+                runSlideDetection();
+              }
+            } else {
+              // Subtitles may not be parsed yet, retry shortly
+              setTimeout(tryAutoDetect, 500);
+            }
+          }
+          video.addEventListener('loadeddata', function onLoaded() {
+            video.removeEventListener('loadeddata', onLoaded);
+            // Give subtitle parsing a moment to finish
+            setTimeout(tryAutoDetect, 300);
+          });
+        }
       });
     });
 
@@ -550,12 +570,34 @@
       reprocessSubtitles();
     });
 
-    // Slide detection button
-    document.getElementById('detectSlidesBtn').addEventListener('click', function() {
+    // Slide detection parameter controls — sync slider ↔ number input
+    function syncPair(sliderId, numId) {
+      var slider = document.getElementById(sliderId);
+      var num = document.getElementById(numId);
+      slider.addEventListener('input', function() { num.value = this.value; });
+      num.addEventListener('input', function() { slider.value = this.value; });
+    }
+    syncPair('sdIntervalSlider', 'sdIntervalNum');
+    syncPair('sdThresholdSlider', 'sdThresholdNum');
+    syncPair('sdSizeSlider', 'sdSizeNum');
+    syncPair('sdDedupSlider', 'sdDedupNum');
+
+    // Read current slide detection options from controls
+    function getSlideDetectOptions() {
+      return {
+        coarseInterval: parseFloat(document.getElementById('sdIntervalNum').value) || 30,
+        diffThreshold: parseFloat(document.getElementById('sdThresholdNum').value) || 5,
+        compareSize: parseInt(document.getElementById('sdSizeNum').value) || 128,
+        dedupGap: parseFloat(document.getElementById('sdDedupNum').value)
+      };
+    }
+
+    // Run slide detection
+    function runSlideDetection() {
       var video = document.getElementById('hyperplayer');
       var section = document.querySelector('#hypertranscript article section');
       var statusEl = document.getElementById('slideDetectStatus');
-      var btn = this;
+      var btn = document.getElementById('detectSlidesBtn');
 
       if (!video.duration || !section.querySelector('span[data-m]')) {
         statusEl.textContent = 'Please load video and subtitles first.';
@@ -567,7 +609,7 @@
 
       detectSlideChanges(video, section, function(msg) {
         statusEl.textContent = msg;
-      }).then(function(count) {
+      }, getSlideDetectOptions()).then(function(count) {
         statusEl.textContent = 'Found ' + count + ' slide change(s).';
         btn.disabled = false;
       }).catch(function(err) {
@@ -575,7 +617,10 @@
         btn.disabled = false;
         console.error(err);
       });
-    });
+    }
+
+    // Slide detection button
+    document.getElementById('detectSlidesBtn').addEventListener('click', runSlideDetection);
 
     // Thumbnail click → seek video and play
     document.getElementById('hypertranscript').addEventListener('click', function(e) {
